@@ -83,6 +83,20 @@ Este projeto foi desenvolvido e exaustivamente validado nas seguintes especifica
 
 > [!NOTE]
 > Se você estiver utilizando uma versão mais recente do Python (ex: Python 3.12+) ou uma nova versão do Raspberry Pi OS, atente-se às políticas do PEP 668. O instalador automatizado [`install.sh`](file:///home/pi5/Desktop/gravacao_raspberry/install.sh) utiliza `--system-site-packages` para manter a compatibilidade com os drivers binários da placa.
+---
+
+## 📷 Modos Oficiais da Câmera (Sony IMX708 / Camera Module 3)
+
+O driver [`cameras/imx708.py`](file:///home/pi5/Desktop/gravacao_raspberry/cameras/imx708.py) implementa os modos nativos do sensor Sony IMX708 e perfis de vídeo otimizados:
+
+| Chave do Modo | Resolução | FPS Máx | Modo Sensor | Descrição e Aplicação |
+|:---|:---:|:---:|:---:|:---|
+| `FULL_RES` | **4608 x 2592** | ~14 fps | Nativo 0 (Crop Total) | 11.9 MP sem binning. Máxima riqueza de detalhes para fotos e time-lapses. |
+| `HIGH_QUALITY` | **2304 x 1296** | ~56 fps | Nativo 1 (2x2 Binning) | Modo padrão Full FOV (campo total). Maior sensibilidade luminosa e nitidez. |
+| `FHD_MODE` | **1920 x 1080** | ~56 fps | Escalado ISP (Modo 1) | Padrão Full HD 16:9 compatível com a maioria dos reprodutores de vídeo. |
+| `HIGH_SPEED` | **1536 x 864** | ~120 fps | Nativo 2 (2x Crop) | Alta velocidade nativa do sensor para rastrear o voo veloz de abelhas. |
+| `HD_MODE` | **1280 x 720** | ~120 fps | Escalado ISP (Modo 2) | HD a 120 FPS. Excelente relação fluidez vs tamanho de arquivo. |
+| `HDR_MODE` | **2304 x 1296** | ~30 fps | Nativo 1 (HDR Sensor) | Alto Alcance Dinâmico por hardware no sensor IMX708 para sol direto. |
 
 ---
 

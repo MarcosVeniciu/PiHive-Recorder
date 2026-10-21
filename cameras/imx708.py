@@ -1,6 +1,6 @@
 """
 Driver para Raspberry Pi Camera Module 3 (Sensor Sony IMX708).
-Utiliza rpicam-vid para captura com aceleração de hardware e mkvmerge para empacotamento.
+Configurações oficiais suportadas pelo sensor IMX708 via libcamera / rpicam-vid.
 """
 
 import shutil
@@ -12,28 +12,66 @@ from cameras.base_camera import BaseCamera
 
 
 class IMX708Camera(BaseCamera):
-    """Implementação para Camera Module 3 (Sony IMX708)."""
+    """
+    Implementação para Raspberry Pi Camera Module 3 (Sony IMX708).
+    
+    Especificações Oficiais do Sensor:
+      • Sensor: Sony IMX708 (CMOS retroiluminado e empilhado com PDAF)
+      • Resolução Máxima Nativa: 4608 x 2592 pixels (11.9 Megapixels)
+      • Modos Nativos de Sensor expostos pelo driver do kernel:
+          - Modo 0: 4608x2592 [14.35 fps máx - Sem binning, crop total (0,0)/4608x2592]
+          - Modo 1: 2304x1296 [56.03 fps máx - 2x2 binning, crop total (0,0)/4608x2592]
+          - Modo 2: 1536x864  [120.13 fps máx - 2x2 binning com crop central 2x (768,432)/3072x1728]
+      • Recursos de Hardware:
+          - Foco Automático por Detecção de Fase (PDAF) e Controle de Lente Manual (0.0 a 32.0 dioptrias)
+          - HDR Nativo de Múltipla Exposição no Sensor (até 2304x1296 @ 30fps)
+          - Ajuste de Obturador de ~100µs até 11.2 segundos
+          - Ganho Analógico de 1.0x até 16.0x (com ganho digital estendido)
+    """
 
     MODES: Dict[str, Dict[str, Any]] = {
+        "FULL_RES": {
+            "label": "4608x2592 ~14 FPS (Resolução Máxima Nativa - Modo 0)",
+            "resolution": (4608, 2592),
+            "fps": 14,
+            "hdr_capable": False,
+            "description": "Modo nativo total (11.9 MP). Máxima nitidez e riqueza de detalhes para time-lapse ou estáticas.",
+        },
         "HIGH_QUALITY": {
-            "label": "2304x1296 ~56 FPS (Qualidade Máxima)",
+            "label": "2304x1296 ~56 FPS (Qualidade Máxima - Modo 1)",
             "resolution": (2304, 1296),
             "fps": 56,
+            "hdr_capable": True,
+            "description": "Modo nativo binned (3 MP, Full FOV). Maior sensibilidade luminosa e alta fluidez.",
         },
         "FHD_MODE": {
-            "label": "1920x1080 ~56 FPS (FHD)",
+            "label": "1920x1080 ~56 FPS (Full HD 1080p)",
             "resolution": (1920, 1080),
             "fps": 56,
-        },
-        "HD_MODE": {
-            "label": "1280x720 ~120 FPS (HD)",
-            "resolution": (1280, 720),
-            "fps": 120,
+            "hdr_capable": True,
+            "description": "Full HD 16:9 escalado por hardware pelo ISP. Padrão balanceado e compatível.",
         },
         "HIGH_SPEED": {
-            "label": "1536x864 ~120 FPS (Alta Velocidade)",
+            "label": "1536x864 ~120 FPS (Alta Velocidade Nativa - Modo 2)",
             "resolution": (1536, 864),
             "fps": 120,
+            "hdr_capable": False,
+            "description": "Modo nativo de alta velocidade com recorte central 2x para capturar voo rápido de abelhas.",
+        },
+        "HD_MODE": {
+            "label": "1280x720 ~120 FPS (HD Alta Velocidade)",
+            "resolution": (1280, 720),
+            "fps": 120,
+            "hdr_capable": False,
+            "description": "720p a 120 FPS. Excelente compromisso entre alta velocidade e tamanho de arquivo reduzido.",
+        },
+        "HDR_MODE": {
+            "label": "2304x1296 ~30 FPS (HDR Multi-Exposição Nativo)",
+            "resolution": (2304, 1296),
+            "fps": 30,
+            "hdr_capable": True,
+            "is_hdr": True,
+            "description": "Alto Alcance Dinâmico (HDR direto no sensor IMX708) para iluminação de alto contraste solar.",
         },
     }
 
@@ -45,6 +83,8 @@ class IMX708Camera(BaseCamera):
         "AWB_ENABLE": True,
         "AUTO_GAIN": False,
         "EXPOSURE_VALUE": 0.0,
+        "HDR_ENABLE": False,
+        "METERING": "matrix",
     }
 
     @property
@@ -60,7 +100,7 @@ class IMX708Camera(BaseCamera):
             return settings
 
         try:
-            with open(settings_file, "r") as f:
+            with open(settings_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if ":" in line:
                         k, v = line.strip().split(":", 1)
@@ -72,8 +112,10 @@ class IMX708Camera(BaseCamera):
                             settings[k] = int(float(v))
                         elif k in ("ANALOGUE_GAIN", "LENS_POSITION", "EXPOSURE_VALUE"):
                             settings[k] = float(v)
-                        elif k in ("AWB_ENABLE", "AUTO_GAIN"):
+                        elif k in ("AWB_ENABLE", "AUTO_GAIN", "HDR_ENABLE"):
                             settings[k] = v.lower() == "true"
+                        elif k == "METERING":
+                            settings[k] = v
         except Exception as e:
             print(f"[IMX708] Erro ao carregar configurações de {settings_file}: {e}")
 
@@ -96,6 +138,10 @@ class IMX708Camera(BaseCamera):
         awb_enable = settings.get("AWB_ENABLE", True)
         auto_gain = settings.get("AUTO_GAIN", False)
         ev_val = settings.get("EXPOSURE_VALUE", 0.0)
+        metering = settings.get("METERING", "matrix")
+        
+        # Suporte a HDR nativo do sensor IMX708
+        use_hdr = mode_info.get("is_hdr", False) or settings.get("HDR_ENABLE", False)
 
         cmd = [
             "rpicam-vid",
@@ -107,10 +153,13 @@ class IMX708Camera(BaseCamera):
             "--lens-position", str(lens),
             "--nopreview",
             "--inline",
-            "--metering", "matrix",
+            "--metering", str(metering),
             "--denoise", "cdn_off",
             "--shutter", str(shutter),
         ]
+
+        if use_hdr:
+            cmd.extend(["--hdr", "sensor"])
 
         if auto_gain:
             cmd.extend(["--ev", str(ev_val)])

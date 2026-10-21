@@ -22,34 +22,6 @@ from PyQt5.QtCore import QSize, Qt, QTimer, QEvent
 from PyQt5.QtGui import QSurfaceFormat, QPainter, QPen, QColor, QFont
 from functools import partial 
 
-# --- CONFIGURAÇÃO DA CÂMERA ---
-CAMERA_MODES = {
-    "HIGH_QUALITY": {
-        "label": "2304x1296 ~56 FPS (Qualidade Máxima)",
-        "resolution": (2304, 1296),
-        "fps": 56,
-        "bit_depth": 10
-    },
-    "FHD_MODE": {
-        "label": "1920x1080 ~56 FPS (FHD)",
-        "resolution": (1920, 1080),
-        "fps": 56,
-        "bit_depth": 10
-    },
-    "HD_MODE": {
-        "label": "1280x720 ~120 FPS (HD)",
-        "resolution": (1280, 720),
-        "fps": 120,
-        "bit_depth": 10
-    },
-    "HIGH_SPEED": {
-        "label": "1536x864 ~120 FPS (Alta Velocidade)",
-        "resolution": (1536, 864),
-        "fps": 120,
-        "bit_depth": 10
-    }
-}
-
 from pathlib import Path
 import sys
 
@@ -58,6 +30,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import config
+from cameras.imx708 import IMX708Camera
+
+# Utiliza os modos e resoluções oficiais suportados pelo sensor IMX708
+CAMERA_MODES = IMX708Camera.MODES
 SETTINGS_FILE = config.SETTINGS_FILE
 
 class FloatingOverlay(QWidget):
@@ -216,33 +192,24 @@ class CameraControlWindow(QWidget):
         panel_layout.setSpacing(15)
         panel_layout.setContentsMargins(10, 10, 10, 10)
 
-        # --- Grupo de Modo ---
-        mode_groupbox = QGroupBox("Modo de Câmera")
+        # --- Grupo de Modo (IMX708) ---
+        mode_groupbox = QGroupBox("Modo de Câmera (IMX708)")
         mode_layout = QVBoxLayout()
         
-        self.radio_high_quality = QRadioButton(CAMERA_MODES["HIGH_QUALITY"]["label"])
-        self.radio_fhd = QRadioButton(CAMERA_MODES["FHD_MODE"]["label"])
-        self.radio_hd = QRadioButton(CAMERA_MODES["HD_MODE"]["label"])
-        self.radio_high_speed = QRadioButton(CAMERA_MODES["HIGH_SPEED"]["label"])
+        self.mode_radios = {}
+        current_mode = self.initial_config.get("MODE", "HIGH_QUALITY")
+        if current_mode not in CAMERA_MODES:
+            current_mode = "HIGH_QUALITY"
 
-        current_mode = self.initial_config["MODE"]
-        self.radio_high_quality.setChecked(current_mode == "HIGH_QUALITY")
-        self.radio_fhd.setChecked(current_mode == "FHD_MODE")
-        self.radio_hd.setChecked(current_mode == "HD_MODE")
-        self.radio_high_speed.setChecked(current_mode == "HIGH_SPEED")
+        for key, info in CAMERA_MODES.items():
+            radio = QRadioButton(info["label"])
+            radio.setChecked(key == current_mode)
+            radio.toggled.connect(self.on_mode_change)
+            self.mode_radios[key] = radio
+            mode_layout.addWidget(radio)
 
-        if not any([r.isChecked() for r in [self.radio_high_quality, self.radio_fhd, self.radio_hd, self.radio_high_speed]]):
-            self.radio_high_quality.setChecked(True)
-
-        self.radio_high_quality.toggled.connect(self.on_mode_change)
-        self.radio_fhd.toggled.connect(self.on_mode_change)
-        self.radio_hd.toggled.connect(self.on_mode_change)
-        self.radio_high_speed.toggled.connect(self.on_mode_change)
-        
-        mode_layout.addWidget(self.radio_high_quality)
-        mode_layout.addWidget(self.radio_fhd)
-        mode_layout.addWidget(self.radio_hd)
-        mode_layout.addWidget(self.radio_high_speed)
+        if not any(r.isChecked() for r in self.mode_radios.values()):
+            list(self.mode_radios.values())[0].setChecked(True)
         
         mode_groupbox.setLayout(mode_layout)
         
@@ -449,17 +416,22 @@ class CameraControlWindow(QWidget):
             self.current_focus_internal = int(lens_position * 100) 
             
             current_mode_key = "HIGH_QUALITY"
-            if self.radio_fhd.isChecked(): current_mode_key = "FHD_MODE"
-            elif self.radio_hd.isChecked(): current_mode_key = "HD_MODE"
-            elif self.radio_high_speed.isChecked(): current_mode_key = "HIGH_SPEED"
+            for key, radio in self.mode_radios.items():
+                if radio.isChecked():
+                    current_mode_key = key
+                    break
             
-            mode_config = CAMERA_MODES[current_mode_key]
+            mode_config = CAMERA_MODES.get(current_mode_key, CAMERA_MODES["HIGH_QUALITY"])
 
             if is_initial_setup:
                 self.picam2.stop()
                 
+                # Para resoluções nativas acima de 2304x1296, dimensiona o preview widget para segurança
+                p_w = min(mode_config["resolution"][0], 2304)
+                p_h = min(mode_config["resolution"][1], 1296)
+
                 preview_config = self.picam2.create_preview_configuration(
-                    main={"size": mode_config["resolution"]},
+                    main={"size": (p_w, p_h)},
                     controls={"FrameRate": mode_config["fps"]},
                     queue=False, 
                     buffer_count=4 
@@ -491,15 +463,16 @@ class CameraControlWindow(QWidget):
                 self.picam2.start()
             
             if not is_initial_setup:
-                with open(SETTINGS_FILE, 'w') as f:
+                with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
                     f.write(f"MODE: {current_mode_key}\n")
                     f.write(f"SHUTTER_SPEED: {shutter_speed}\n")
                     f.write(f"ANALOGUE_GAIN: {analogue_gain}\n")
                     f.write(f"LENS_POSITION: {lens_position}\n")
                     f.write(f"AWB_ENABLE: {awb_enabled}\n")
                     f.write(f"AUTO_GAIN: {auto_gain_enabled}\n")
-                    f.write(f"EXPOSURE_VALUE: {ev_val}\n") # Salva o EV
-                print(f"[LOG] Configurações salvas. EV: {ev_val}")
+                    f.write(f"EXPOSURE_VALUE: {ev_val}\n")
+                    f.write(f"HDR_ENABLE: {mode_config.get('is_hdr', False)}\n")
+                print(f"[LOG] Configurações salvas em {SETTINGS_FILE}. Modo: {current_mode_key}, EV: {ev_val}")
 
         except Exception as e:
             print(f"[ERRO] Erro ao aplicar configurações: {e}")
