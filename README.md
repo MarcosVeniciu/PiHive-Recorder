@@ -62,6 +62,7 @@ graph TD
 * 🌡️ **Monitoramento Climático Multissensor:** Suporte nativo a múltiplos sensores Sensirion SHT20 em barramentos I2C simultâneos (I2C-1 por hardware e I2C-3 por software GPIO).
 * ⚡ **Telemetria de Consumo e Hardware:** Estimativa contínua de consumo em Watts (perfis Min/Med/Max para Pi 5), temperatura do SoC, clock de CPU e alertas de throttling por aquecimento ou subtensão via `vcgencmd`.
 * 🔄 **Recuperação de Queda de Energia (Autostart Inteligente):** Inicialização automática no boot com contagem regressiva de 60 segundos com janela de cancelamento pelo teclado para permitir ajustes antes de iniciar a gravação.
+* 🎯 **Recorte de Área de Interesse por Hardware (Hardware ROI 736x736 @ 120 FPS):** O ISP de hardware recorta a região de interesse diretamente do fluxo bruto do sensor sem interpolação, sem atraso de scripts e com zero uso adicional de CPU, preservando a densidade total de pixels nativos.
 * 📂 **Separação Limpa de Dados:** Todos os vídeos, logs de execução e arquivos CSV são gravados automaticamente na pasta `~/Desktop/Gravacoes_Colmeia/`, mantendo o repositório Git limpo.
 * 🧩 **Extensibilidade Modular:** Classes base abstratas (`BaseCamera` e `BaseSensor`) facilitam adicionar suporte a novas câmeras (HQ Camera IMX477, USB V4L2) ou sensores (BME280, DHT22, DS18B20).
 

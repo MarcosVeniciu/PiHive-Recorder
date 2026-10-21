@@ -85,6 +85,11 @@ class IMX708Camera(BaseCamera):
         "EXPOSURE_VALUE": 0.0,
         "HDR_ENABLE": False,
         "METERING": "matrix",
+        "ROI_ENABLE": False,
+        "ROI_WIDTH": 736,
+        "ROI_HEIGHT": 736,
+        "ROI_X": 400,
+        "ROI_Y": 64,
     }
 
     @property
@@ -112,8 +117,10 @@ class IMX708Camera(BaseCamera):
                             settings[k] = int(float(v))
                         elif k in ("ANALOGUE_GAIN", "LENS_POSITION", "EXPOSURE_VALUE"):
                             settings[k] = float(v)
-                        elif k in ("AWB_ENABLE", "AUTO_GAIN", "HDR_ENABLE"):
+                        elif k in ("AWB_ENABLE", "AUTO_GAIN", "HDR_ENABLE", "ROI_ENABLE"):
                             settings[k] = v.lower() == "true"
+                        elif k in ("ROI_WIDTH", "ROI_HEIGHT", "ROI_X", "ROI_Y"):
+                            settings[k] = int(float(v))
                         elif k == "METERING":
                             settings[k] = v
         except Exception as e:
@@ -143,12 +150,36 @@ class IMX708Camera(BaseCamera):
         # Suporte a HDR nativo do sensor IMX708
         use_hdr = mode_info.get("is_hdr", False) or settings.get("HDR_ENABLE", False)
 
+        # Suporte a Recorte de Área de Interesse (Hardware ROI)
+        roi_enable = settings.get("ROI_ENABLE", False)
+        roi_w = settings.get("ROI_WIDTH", 736)
+        roi_h = settings.get("ROI_HEIGHT", 736)
+        roi_x = settings.get("ROI_X", 0)
+        roi_y = settings.get("ROI_Y", 0)
+
+        out_width = width
+        out_height = height
+        roi_str = None
+
+        if roi_enable and width >= roi_w and height >= roi_h:
+            # Enquadra o ROI dentro dos limites do modo do sensor
+            clamped_x = max(0, min(roi_x, width - roi_w))
+            clamped_y = max(0, min(roi_y, height - roi_h))
+            norm_x = clamped_x / width
+            norm_y = clamped_y / height
+            norm_w = roi_w / width
+            norm_h = roi_h / height
+            
+            out_width = roi_w
+            out_height = roi_h
+            roi_str = f"{norm_x:.4f},{norm_y:.4f},{norm_w:.4f},{norm_h:.4f}"
+
         cmd = [
             "rpicam-vid",
             "-o", str(output_h264),
             "-t", str(duration_ms),
-            "--width", str(width),
-            "--height", str(height),
+            "--width", str(out_width),
+            "--height", str(out_height),
             "--framerate", str(fps),
             "--lens-position", str(lens),
             "--nopreview",
@@ -157,6 +188,9 @@ class IMX708Camera(BaseCamera):
             "--denoise", "cdn_off",
             "--shutter", str(shutter),
         ]
+
+        if roi_str:
+            cmd.extend(["--roi", roi_str])
 
         if use_hdr:
             cmd.extend(["--hdr", "sensor"])

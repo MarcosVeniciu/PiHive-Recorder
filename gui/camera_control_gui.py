@@ -53,31 +53,79 @@ class FloatingOverlay(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # --- Desenho da Linha ---
-        pen = QPen(QColor(255, 0, 0), 2)
-        pen.setStyle(Qt.DashLine)
-        painter.setPen(pen)
+        parent = self.parent()
         
-        x_center = int(self.width() / 2)
-        height = self.height()
-        
-        painter.drawLine(x_center, 0, x_center, height)
-        
-        # --- Desenho do Texto ---
-        # Fundo preto semi-transparente para legibilidade
-        painter.setBrush(QColor(0, 0, 0, 150))
-        painter.setPen(Qt.NoPen)
-        painter.drawRect(x_center - 130, 10, 260, 30)
-        
-        painter.setPen(QPen(QColor(255, 255, 255), 1))
-        font = QFont()
-        font.setBold(True)
-        font.setPointSize(10)
-        painter.setFont(font)
-        
-        # AQUI MANTEMOS A MENSAGEM ORIGINAL POIS O ROI FOI REMOVIDO DO GRAVADOR
-        # MAS A LINHA AINDA SERVE DE REFERÊNCIA VISUAL PARA O CENTRO
-        painter.drawText(x_center - 120, 30, "◄ LADO ESQUERDO | LADO DIREITO ►")
+        # Se o recorte ROI estiver ativado, desenha a caixa de enquadramento
+        if parent and getattr(parent, "roi_enabled", False):
+            mode_w = max(1, getattr(parent, "current_mode_width", 1536))
+            mode_h = max(1, getattr(parent, "current_mode_height", 864))
+            
+            # Escala as coordenadas do sensor para o tamanho visual do widget de preview
+            scale_x = self.width() / mode_w
+            scale_y = self.height() / mode_h
+            
+            bx = int(parent.roi_x * scale_x)
+            by = int(parent.roi_y * scale_y)
+            bw = int(parent.roi_w * scale_x)
+            bh = int(parent.roi_h * scale_y)
+            
+            # 1. Máscara escura suave na área externa que será descartada
+            painter.setBrush(QColor(0, 0, 0, 110))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(0, 0, self.width(), by)
+            painter.drawRect(0, by + bh, self.width(), self.height() - (by + bh))
+            painter.drawRect(0, by, bx, bh)
+            painter.drawRect(bx + bw, by, self.width() - (bx + bw), bh)
+            
+            # 2. Retângulo demarcador de corte
+            pen_box = QPen(QColor(255, 40, 40), 3)
+            pen_box.setStyle(Qt.SolidLine)
+            painter.setPen(pen_box)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(bx, by, bw, bh)
+            
+            # 3. Mira central suave no meio do enquadramento
+            pen_cross = QPen(QColor(255, 255, 255, 200), 1)
+            pen_cross.setStyle(Qt.DashLine)
+            painter.setPen(pen_cross)
+            cx = bx + bw // 2
+            cy = by + bh // 2
+            painter.drawLine(cx - 20, cy, cx + 20, cy)
+            painter.drawLine(cx, cy - 20, cx, cy + 20)
+            
+            # 4. Etiqueta informativa
+            painter.setBrush(QColor(220, 20, 20, 220))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(bx, max(0, by - 26), 230, 24)
+            
+            painter.setPen(QPen(QColor(255, 255, 255), 1))
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(9)
+            painter.setFont(font)
+            painter.drawText(bx + 8, max(0, by - 26) + 16, f"REC HW: {parent.roi_w}x{parent.roi_h} (120 FPS)")
+            
+        else:
+            # Modo padrão sem ROI: linha guia central
+            pen = QPen(QColor(255, 0, 0), 2)
+            pen.setStyle(Qt.DashLine)
+            painter.setPen(pen)
+            
+            x_center = int(self.width() / 2)
+            height = self.height()
+            painter.drawLine(x_center, 0, x_center, height)
+            
+            # Fundo preto semi-transparente para legibilidade
+            painter.setBrush(QColor(0, 0, 0, 150))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(x_center - 130, 10, 260, 30)
+            
+            painter.setPen(QPen(QColor(255, 255, 255), 1))
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(10)
+            painter.setFont(font)
+            painter.drawText(x_center - 120, 30, "◄ LADO ESQUERDO | LADO DIREITO ►")
 
 def load_settings():
     print("[LOG] Iniciando o carregamento das configurações...")
@@ -88,26 +136,38 @@ def load_settings():
         "LENS_POSITION": 0.0,
         "AWB_ENABLE": "True",
         "AUTO_GAIN": "False",
-        "EXPOSURE_VALUE": 0.0 # Novo Padrão
+        "EXPOSURE_VALUE": 0.0,
+        "ROI_ENABLE": "False",
+        "ROI_WIDTH": 736,
+        "ROI_HEIGHT": 736,
+        "ROI_X": 400,
+        "ROI_Y": 64
     }
     try:
-        config = {}
-        with open(SETTINGS_FILE, 'r') as f:
-            for line in f:
-                if ':' in line:
-                    key, value = line.strip().split(':', 1)
-                    config[key.strip()] = value.strip()
+        config_map = {}
+        if SETTINGS_FILE.exists():
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if ':' in line:
+                        key, value = line.strip().split(':', 1)
+                        config_map[key.strip()] = value.strip()
         
-        mode = config.get("MODE", defaults["MODE"])
+        mode = config_map.get("MODE", defaults["MODE"])
         if mode not in CAMERA_MODES:
             mode = defaults["MODE"]
             
-        shutter = int(float(config.get("SHUTTER_SPEED", defaults["SHUTTER_SPEED"])))
-        gain = float(config.get("ANALOGUE_GAIN", defaults["ANALOGUE_GAIN"]))
-        lens_pos = float(config.get("LENS_POSITION", defaults["LENS_POSITION"]))
-        awb_enable = config.get("AWB_ENABLE", defaults["AWB_ENABLE"]) == "True"
-        auto_gain = config.get("AUTO_GAIN", defaults["AUTO_GAIN"]) == "True"
-        ev_val = float(config.get("EXPOSURE_VALUE", defaults["EXPOSURE_VALUE"]))
+        shutter = int(float(config_map.get("SHUTTER_SPEED", defaults["SHUTTER_SPEED"])))
+        gain = float(config_map.get("ANALOGUE_GAIN", defaults["ANALOGUE_GAIN"]))
+        lens_pos = float(config_map.get("LENS_POSITION", defaults["LENS_POSITION"]))
+        awb_enable = config_map.get("AWB_ENABLE", defaults["AWB_ENABLE"]) == "True"
+        auto_gain = config_map.get("AUTO_GAIN", defaults["AUTO_GAIN"]) == "True"
+        ev_val = float(config_map.get("EXPOSURE_VALUE", defaults["EXPOSURE_VALUE"]))
+        
+        roi_enable = config_map.get("ROI_ENABLE", defaults["ROI_ENABLE"]) == "True"
+        roi_w = int(float(config_map.get("ROI_WIDTH", defaults["ROI_WIDTH"])))
+        roi_h = int(float(config_map.get("ROI_HEIGHT", defaults["ROI_HEIGHT"])))
+        roi_x = int(float(config_map.get("ROI_X", defaults["ROI_X"])))
+        roi_y = int(float(config_map.get("ROI_Y", defaults["ROI_Y"])))
         
         return {
             "MODE": mode, 
@@ -116,13 +176,30 @@ def load_settings():
             "LENS_POSITION": lens_pos,
             "AWB_ENABLE": awb_enable,
             "AUTO_GAIN": auto_gain,
-            "EXPOSURE_VALUE": ev_val
+            "EXPOSURE_VALUE": ev_val,
+            "ROI_ENABLE": roi_enable,
+            "ROI_WIDTH": roi_w,
+            "ROI_HEIGHT": roi_h,
+            "ROI_X": roi_x,
+            "ROI_Y": roi_y
         }
 
-    except (FileNotFoundError, ValueError):
-        defaults["AWB_ENABLE"] = True 
-        defaults["AUTO_GAIN"] = False
-        return defaults
+    except Exception as e:
+        print(f"[LOG] Falha ao carregar configurações: {e}")
+        return {
+            "MODE": defaults["MODE"],
+            "SHUTTER_SPEED": defaults["SHUTTER_SPEED"],
+            "ANALOGUE_GAIN": defaults["ANALOGUE_GAIN"],
+            "LENS_POSITION": defaults["LENS_POSITION"],
+            "AWB_ENABLE": True,
+            "AUTO_GAIN": False,
+            "EXPOSURE_VALUE": 0.0,
+            "ROI_ENABLE": False,
+            "ROI_WIDTH": 736,
+            "ROI_HEIGHT": 736,
+            "ROI_X": 400,
+            "ROI_Y": 64
+        }
 
 class CameraControlWindow(QWidget):
     def __init__(self, picam2, initial_config):
@@ -134,6 +211,16 @@ class CameraControlWindow(QWidget):
         
         self.current_focus_internal = int(self.initial_config["LENS_POSITION"] * 100)
         
+        # --- Parâmetros de Recorte de Área de Interesse (ROI) ---
+        self.roi_enabled = self.initial_config.get("ROI_ENABLE", False)
+        self.roi_w = self.initial_config.get("ROI_WIDTH", 736)
+        self.roi_h = self.initial_config.get("ROI_HEIGHT", 736)
+        self.roi_x = self.initial_config.get("ROI_X", 400)
+        self.roi_y = self.initial_config.get("ROI_Y", 64)
+        
+        init_mode = self.initial_config.get("MODE", "HIGH_QUALITY")
+        self.current_mode_width, self.current_mode_height = CAMERA_MODES.get(init_mode, {}).get("resolution", (2304, 1296))
+
         main_layout = QVBoxLayout()
 
         # Container do Vídeo
@@ -349,12 +436,101 @@ class CameraControlWindow(QWidget):
         actions_widget = QWidget()
         actions_widget.setLayout(actions_layout)
 
+        roi_groupbox = self.create_roi_panel()
+
         panel_layout.addWidget(mode_groupbox, stretch=2)
-        panel_layout.addWidget(settings_widget, stretch=5)
+        panel_layout.addWidget(settings_widget, stretch=4)
+        panel_layout.addWidget(roi_groupbox, stretch=3)
         panel_layout.addStretch(1)
         panel_layout.addWidget(actions_widget, stretch=2)
         
         return panel_frame
+
+    def create_roi_panel(self):
+        roi_groupbox = QGroupBox("Enquadramento ROI (736x736)")
+        roi_layout = QVBoxLayout()
+        roi_layout.setSpacing(6)
+
+        self.check_roi = QCheckBox("Ativar Recorte ROI (736x736)")
+        self.check_roi.setChecked(self.roi_enabled)
+        self.check_roi.toggled.connect(self.on_roi_toggle)
+        roi_layout.addWidget(self.check_roi)
+
+        self.roi_controls_widget = QWidget()
+        ctrls_layout = QVBoxLayout(self.roi_controls_widget)
+        ctrls_layout.setContentsMargins(0, 0, 0, 0)
+        ctrls_layout.setSpacing(4)
+
+        self.label_roi_info = QLabel(f"Posição: X={self.roi_x} | Y={self.roi_y}")
+        self.label_roi_info.setStyleSheet("font-weight: bold; color: #D32F2F;")
+        ctrls_layout.addWidget(self.label_roi_info)
+
+        lbl_x = QLabel("Deslocamento X (Horizontal):")
+        self.slider_roi_x = QSlider(Qt.Horizontal)
+        self.slider_roi_x.setMinimum(0)
+        self.slider_roi_x.setMaximum(max(0, self.current_mode_width - self.roi_w))
+        self.slider_roi_x.setValue(self.roi_x)
+        self.slider_roi_x.valueChanged.connect(self.on_roi_slider_changed)
+        ctrls_layout.addWidget(lbl_x)
+        ctrls_layout.addWidget(self.slider_roi_x)
+
+        lbl_y = QLabel("Deslocamento Y (Vertical):")
+        self.slider_roi_y = QSlider(Qt.Horizontal)
+        self.slider_roi_y.setMinimum(0)
+        self.slider_roi_y.setMaximum(max(0, self.current_mode_height - self.roi_h))
+        self.slider_roi_y.setValue(self.roi_y)
+        self.slider_roi_y.valueChanged.connect(self.on_roi_slider_changed)
+        ctrls_layout.addWidget(lbl_y)
+        ctrls_layout.addWidget(self.slider_roi_y)
+
+        btn_center = QPushButton("Centralizar Recorte")
+        btn_center.clicked.connect(self.center_roi)
+        ctrls_layout.addWidget(btn_center)
+
+        roi_layout.addWidget(self.roi_controls_widget)
+        roi_layout.addStretch()
+        roi_groupbox.setLayout(roi_layout)
+
+        self.update_roi_limits()
+        return roi_groupbox
+
+    def on_roi_toggle(self, checked):
+        self.roi_enabled = checked
+        self.roi_controls_widget.setEnabled(checked)
+        self.floating_overlay.update()
+
+    def on_roi_slider_changed(self):
+        self.roi_x = self.slider_roi_x.value()
+        self.roi_y = self.slider_roi_y.value()
+        self.label_roi_info.setText(f"Posição: X={self.roi_x} | Y={self.roi_y}")
+        self.floating_overlay.update()
+
+    def center_roi(self):
+        max_x = max(0, self.current_mode_width - self.roi_w)
+        max_y = max(0, self.current_mode_height - self.roi_h)
+        self.slider_roi_x.setValue(max_x // 2)
+        self.slider_roi_y.setValue(max_y // 2)
+
+    def update_roi_limits(self):
+        can_support = (self.current_mode_width >= self.roi_w and self.current_mode_height >= self.roi_h)
+        if not can_support:
+            self.check_roi.setEnabled(False)
+            self.check_roi.setChecked(False)
+            self.check_roi.setToolTip(f"O modo {self.current_mode_width}x{self.current_mode_height} é menor que {self.roi_w}x{self.roi_h}.")
+            self.roi_controls_widget.setEnabled(False)
+        else:
+            self.check_roi.setEnabled(True)
+            self.check_roi.setToolTip("Gravar recorte direto de 736x736 pelo hardware da câmera.")
+            max_x = max(0, self.current_mode_width - self.roi_w)
+            max_y = max(0, self.current_mode_height - self.roi_h)
+            self.slider_roi_x.setMaximum(max_x)
+            self.slider_roi_y.setMaximum(max_y)
+            if self.slider_roi_x.value() > max_x:
+                self.slider_roi_x.setValue(max_x)
+            if self.slider_roi_y.value() > max_y:
+                self.slider_roi_y.setValue(max_y)
+            self.roi_controls_widget.setEnabled(self.check_roi.isChecked())
+        self.floating_overlay.update()
 
     def toggle_gain_controls(self):
         is_auto = self.check_auto_gain.isChecked()
@@ -402,6 +578,12 @@ class CameraControlWindow(QWidget):
 
     def on_mode_change(self):
         if self.sender().isChecked():
+            for key, radio in self.mode_radios.items():
+                if radio.isChecked():
+                    mode_info = CAMERA_MODES.get(key, {})
+                    self.current_mode_width, self.current_mode_height = mode_info.get("resolution", (2304, 1296))
+                    break
+            self.update_roi_limits()
             self.reconfigure_camera_and_apply(is_initial_setup=True)
 
     def reconfigure_camera_and_apply(self, is_initial_setup=False):
@@ -472,7 +654,12 @@ class CameraControlWindow(QWidget):
                     f.write(f"AUTO_GAIN: {auto_gain_enabled}\n")
                     f.write(f"EXPOSURE_VALUE: {ev_val}\n")
                     f.write(f"HDR_ENABLE: {mode_config.get('is_hdr', False)}\n")
-                print(f"[LOG] Configurações salvas em {SETTINGS_FILE}. Modo: {current_mode_key}, EV: {ev_val}")
+                    f.write(f"ROI_ENABLE: {self.check_roi.isChecked()}\n")
+                    f.write(f"ROI_WIDTH: {self.roi_w}\n")
+                    f.write(f"ROI_HEIGHT: {self.roi_h}\n")
+                    f.write(f"ROI_X: {self.roi_x}\n")
+                    f.write(f"ROI_Y: {self.roi_y}\n")
+                print(f"[LOG] Configurações salvas em {SETTINGS_FILE}. Modo: {current_mode_key}, ROI: {self.check_roi.isChecked()} ({self.roi_w}x{self.roi_h} em X={self.roi_x}, Y={self.roi_y})")
 
         except Exception as e:
             print(f"[ERRO] Erro ao aplicar configurações: {e}")
@@ -498,7 +685,7 @@ if __name__ == "__main__":
     picam2 = Picamera2()
 
     window = CameraControlWindow(picam2, loaded_config)
-    window.resize(950, 700)
+    window.resize(1180, 750)
     window.show()
     
     sys.exit(app.exec())
