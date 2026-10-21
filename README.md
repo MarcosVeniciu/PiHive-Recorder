@@ -51,8 +51,8 @@ graph TD
 
 ## ✨ Principais Funcionalidades
 
-* 🎥 **Gravação Automática Segmentada:** Fatiamento de vídeos (padrão 60s) diretamente em H.264 acelerado por hardware e empacotado para MKV via `mkvmerge` preservando taxa de quadros real.
-* 🖥️ **Interface Gráfica de Calibração (GUI):** Preview em tempo real com overlay de centralização para ajuste fino de:
+* 📹 **Gravação Automática Segmentada:** Fatiamento de vídeos (padrão 60s) diretamente em H.264 acelerado por hardware e empacotado para MKV via `mkvmerge` preservando taxa de quadros real.
+* 🎛️ **Interface Gráfica de Calibração (GUI):** Preview em tempo real com overlay de centralização para ajuste fino de:
   * Posição da lente / Foco manual
   * Velocidade de obturador (Shutter speed em µs)
   * Ganho analógico e Prioridade de Shutter (Auto Gain)
@@ -62,13 +62,13 @@ graph TD
 * 🌡️ **Monitoramento Climático Multissensor:** Suporte nativo a múltiplos sensores Sensirion SHT20 em barramentos I2C simultâneos (I2C-1 por hardware e I2C-3 por software GPIO).
 * ⚡ **Telemetria de Consumo e Hardware:** Estimativa contínua de consumo em Watts (perfis Min/Med/Max para Pi 5), temperatura do SoC, clock de CPU e alertas de throttling por aquecimento ou subtensão via `vcgencmd`.
 * 🔄 **Recuperação de Queda de Energia (Autostart Inteligente):** Inicialização automática no boot com contagem regressiva de 60 segundos com janela de cancelamento pelo teclado para permitir ajustes antes de iniciar a gravação.
-* 🎯 **Recorte de Área de Interesse por Hardware (Hardware ROI 736x736 @ 120 FPS):** O ISP de hardware recorta a região de interesse diretamente do fluxo bruto do sensor sem interpolação, sem atraso de scripts e com zero uso adicional de CPU, preservando a densidade total de pixels nativos.
-* 📂 **Separação Limpa de Dados:** Todos os vídeos, logs de execução e arquivos CSV são gravados automaticamente na pasta `~/Desktop/Gravacoes_Colmeia/`, mantendo o repositório Git limpo.
+* 🎯 **Recorte por Hardware (Hardware ROI 736x736 @ 120 FPS):** O ISP de hardware recorta a região de interesse diretamente do fluxo bruto do sensor sem interpolação, sem atraso de scripts e com zero uso adicional de CPU, preservando a densidade total de pixels nativos.
+* 📁 **Separação Limpa de Dados:** Todos os vídeos, logs de execução e arquivos CSV são gravados automaticamente na pasta `~/Desktop/Gravacoes_Colmeia/`, mantendo o repositório Git limpo.
 * 🧩 **Extensibilidade Modular:** Classes base abstratas (`BaseCamera` e `BaseSensor`) facilitam adicionar suporte a novas câmeras (HQ Camera IMX477, USB V4L2) ou sensores (BME280, DHT22, DS18B20).
 
 ---
 
-## 🖥️ Ambiente Homologado e Compatibilidade
+## 📋 Ambiente Homologado e Compatibilidade
 
 Este projeto foi desenvolvido e exaustivamente validado nas seguintes especificações de sistema e hardware:
 
@@ -109,11 +109,31 @@ Para capturar o voo e detectar **cargas corbiculares de pólen (alvos diminutos 
 4. **Intervalo Intra (`--intra 60`)**: Injeta um I-frame limpo a cada 0,5s, garantindo que em qualquer aproximação da abelha haverá múltiplos quadros perfeitos para anotação e segmentação de pólen.
 5. **Cabeçalhos Inline (`--inline`)**: Força SPS/PPS antes de cada I-frame, permitindo fatiar e processar qualquer trecho do vídeo de forma independente no OpenCV.
 
+#### 💾 Estimativa de Armazenamento e Consumo em Campo
+
+A partir dos testes em bancada a **8 Mbps (736x736 @ 120 FPS)**, temos o seguinte perfil de geração de dados:
+
+| Janela de Tempo | Quantidade de Vídeos | Tamanho Estimado | Observações |
+|:---|:---:|:---:|:---|
+| **1 Bloco (60 segundos)** | 1 arquivo | **~60 MB** | Fatiamento contínuo em contêiner `.mkv` |
+| **1 Hora de Gravação** | 60 arquivos | **~3,6 GB** | Fluxo estável sem picos de CPU |
+| **1 Dia de Coleta (15 horas)** | 900 arquivos | **~54,5 GB** | Janela padrão das **04:00 às 19:00** |
+
+##### ⏳ Autonomia Real de Gravação (Descontando SO e Margem de Segurança)
+
+> [!IMPORTANT]
+> **Cálculo da capacidade real:** Discos e cartões de memória possuem capacidade formatada útil inferior ao valor nominal. Além disso, o sistema operacional (Raspberry Pi OS 64-bit + pacotes + swap) consome cerca de **12 a 14 GB**, e o `PiHive-Recorder` possui parada automática preventiva configurada para **5.0 GB livres** (`LIMITE_ESPACO_LIVRE_GB` em `config.py`).
+
+| Mídia de Armazenamento | Espaço Bruto Formatado | Desconto (SO + Margem 5GB) | Espaço Útil para Vídeos | Autonomia em Horas Contínuas | Autonomia em Dias de Campo (15h/dia) |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| **Cartão 128 GB** (microSD / SSD) | ~119 GB | ~19 GB | **~100 GB livres** | **~27 a 28 horas** | **quase 2 dias completos** (~1,8 dia) |
+| **Cartão 256 GB** (microSD / SSD) | ~238 GB | ~21 GB | **~217 GB livres** | **~59 a 60 horas** | **4 dias completos de coleta** |
+
 ---
 
 ## 🔌 Esquema de Ligação do Hardware
 
-### Sensores de Temperatura e Umidade (SHT20)
+### 🌡️ Sensores de Temperatura e Umidade (SHT20)
 
 | Sensor | Barramento | Linha SDA | Linha SCL | Alimentação |
 |:---|:---|:---|:---|:---|
@@ -139,7 +159,7 @@ cd PiHive-Recorder
 ./install.sh
 ```
 
-### O que o `install.sh` faz automaticamente:
+### ⚙️ O que o instalador automatizado faz:
 1. Instala pacotes do sistema necessários (`mkvtoolnix`, `i2c-tools`, `python3-picamera2`, `python3-pyqt5`, `python3-smbus`, `lxterminal`).
 2. Configura o ambiente virtual Python (`.venv`) com permissão aos drivers de hardware da placa (`--system-site-packages`).
 3. Adiciona o usuário aos grupos de sistema `video` e `i2c`.
@@ -150,9 +170,9 @@ cd PiHive-Recorder
 
 ---
 
-## 🎮 Como Usar
+## 🎬 Como Usar
 
-### 1. Calibrar a Câmera e Foco
+### 1. 🎛️ Calibrar a Câmera e Foco
 Dê duplo clique no atalho **`Ajustar Câmera (PiHive)`** na Área de Trabalho ou execute no terminal:
 ```bash
 ./scripts/ajustar_camera.sh
@@ -161,7 +181,7 @@ Dê duplo clique no atalho **`Ajustar Câmera (PiHive)`** na Área de Trabalho o
 * Configure o obturador (Shutter) para congelar o movimento das abelhas.
 * Clique em **"Aplicar e Salvar"**. As configurações serão gravadas em `~/Desktop/Gravacoes_Colmeia/camera_settings.txt` (isoladas do Git) e lidas automaticamente pelo gravador.
 
-### 2. Iniciar a Gravação Automática
+### 2. 📹 Iniciar a Gravação Automática
 Dê duplo clique no atalho **`Gravar Vídeos (PiHive)`** na Área de Trabalho ou execute:
 ```bash
 ./scripts/iniciar_gravacao.sh
@@ -170,7 +190,7 @@ Dê duplo clique no atalho **`Gravar Vídeos (PiHive)`** na Área de Trabalho ou
 * Se precisar cancelar para mexer na colmeia ou câmera, basta pressionar **`C`** para abrir o menu interativo.
 * Ao fim do tempo (ou pressionando `ENTER`), a gravação e a coleta de sensores iniciam imediatamente.
 
-### 3. Diagnóstico Rápido de Sensores I2C
+### 3. 🧪 Diagnóstico Rápido de Sensores I2C
 Para verificar se ambos os sensores climáticos estão respondendo corretamente:
 ```bash
 python3 tools/teste_sensor.py
@@ -217,12 +237,12 @@ CAMERA_DRIVER = "imx708"         # Driver da câmera ativa
 
 ## 🧩 Como Adicionar Novas Câmeras ou Sensores
 
-### Adicionar uma Nova Câmera
+### 📷 Adicionar uma Nova Câmera
 1. Crie um novo arquivo em `cameras/` (ex: `cameras/imx477.py`) herdando de `BaseCamera` ([`cameras/base_camera.py`](file:///home/pi5/Desktop/gravacao_raspberry/cameras/base_camera.py)).
 2. Implemente os métodos `build_record_command` e `load_settings`.
 3. Registre no arquivo [`cameras/factory.py`](file:///home/pi5/Desktop/gravacao_raspberry/cameras/factory.py) e defina `CAMERA_DRIVER` no `config.py`.
 
-### Adicionar um Novo Sensor
+### 🌡️ Adicionar um Novo Sensor
 1. Crie um novo driver em `sensors/` (ex: `sensors/bme280.py`) herdando de `BaseSensor` ([`sensors/base_sensor.py`](file:///home/pi5/Desktop/gravacao_raspberry/sensors/base_sensor.py)).
 2. Adicione os parâmetros do novo sensor na lista `ACTIVE_SENSORS` em [`config.py`](file:///home/pi5/Desktop/gravacao_raspberry/config.py). O gerenciador cuidará das threads e da escrita das colunas no CSV automaticamente.
 
