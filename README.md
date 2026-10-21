@@ -67,6 +67,25 @@ graph TD
 
 ---
 
+## 🖥️ Ambiente Homologado e Compatibilidade
+
+Este projeto foi desenvolvido e exaustivamente validado nas seguintes especificações de sistema e hardware:
+
+| Componente | Especificação Validada | Observações |
+|:---|:---|:---|
+| **Hardware** | Raspberry Pi 5 (Model B) | Otimizado para Pi 5 (telemetria e perfis de potência) |
+| **Sistema Operacional** | Raspberry Pi OS 64-bit (Debian 12 Bookworm) | Kernel Linux `6.12.75+rpt-rpi-2712 aarch64` |
+| **Python** | Python 3.11.2 | Recomenda-se Python 3.11.x |
+| **Driver de Câmera** | PiCamera2 v0.3.31 + `rpicam-vid` | Pacote nativo `python3-picamera2` |
+| **Framework GUI** | PyQt5 v5.15.9 (`PyQt5-sip==12.11.1`) | Aceleração XCB / OpenGL |
+| **Barramento I2C** | `smbus2==0.4.2` / `python3-smbus` | Suporte a I2C-1 e I2C-3 software GPIO |
+| **Utilitários do Sistema** | `mkvtoolnix` v74.0.0, `i2c-tools` | Empacotamento MKV e barramento I2C |
+
+> [!NOTE]
+> Se você estiver utilizando uma versão mais recente do Python (ex: Python 3.12+) ou uma nova versão do Raspberry Pi OS, atente-se às políticas do PEP 668. O instalador automatizado [`install.sh`](file:///home/pi5/Desktop/gravacao_raspberry/install.sh) utiliza `--system-site-packages` para manter a compatibilidade com os drivers binários da placa.
+
+---
+
 ## 🔌 Esquema de Ligação do Hardware
 
 ### Sensores de Temperatura e Umidade (SHT20)

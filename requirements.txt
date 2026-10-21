@@ -1,6 +1,21 @@
-# Dependências Python para PiHive-Recorder
-# NOTA: No Raspberry Pi OS Bookworm, instale com 'python3 -m venv --system-site-packages'
-# para compartilhar pacotes de hardware do sistema (picamera2, PyQt5, smbus).
+# ==============================================================================
+# PiHive-Recorder - Dependências Python
+# ==============================================================================
+# Ambiente Homologado e Testado:
+#   • Sistema Operacional: Raspberry Pi OS 64-bit / Debian GNU/Linux 12 (Bookworm)
+#   • Arquitetura: aarch64 (ARM 64-bit - Raspberry Pi 5)
+#   • Kernel: Linux 6.12.75+rpt-rpi-2712
+#   • Versão do Python: Python 3.11.2
+#
+# IMPORTANTE:
+# No Raspberry Pi OS Bookworm (PEP 668), crie o venv com:
+#   python3 -m venv --system-site-packages .venv
+# Isso permite que bibliotecas com drivers de hardware compilados pelo sistema
+# (como python3-picamera2 v0.3.31 e python3-smbus) sejam herdadas pelo ambiente.
+# ==============================================================================
 
-psutil>=5.9.0
-PyQt5>=5.15.0
+# Pacotes Pip com versões travadas (testadas e validadas)
+psutil==5.9.4
+PyQt5==5.15.9
+PyQt5-sip==12.11.1
+smbus2==0.4.2
