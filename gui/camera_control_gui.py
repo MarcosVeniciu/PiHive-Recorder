@@ -233,14 +233,14 @@ class CameraControlWindow(QWidget):
         
         main_layout.addWidget(self.video_container, stretch=5)
 
+        # --- CONFIGURAÇÃO DO OVERLAY FLUTUANTE (Criado antes dos painéis) ---
+        self.floating_overlay = FloatingOverlay(self) 
+
         # Painel de controle
         control_panel = self.create_control_panel()
         main_layout.addWidget(control_panel, stretch=1)
 
         self.setLayout(main_layout)
-        
-        # --- CONFIGURAÇÃO DO OVERLAY FLUTUANTE ---
-        self.floating_overlay = FloatingOverlay(self) 
         self.floating_overlay.show()
         
         # Timer para sincronizar a posição do overlay com o vídeo
@@ -497,13 +497,15 @@ class CameraControlWindow(QWidget):
     def on_roi_toggle(self, checked):
         self.roi_enabled = checked
         self.roi_controls_widget.setEnabled(checked)
-        self.floating_overlay.update()
+        if hasattr(self, 'floating_overlay') and self.floating_overlay:
+            self.floating_overlay.update()
 
     def on_roi_slider_changed(self):
         self.roi_x = self.slider_roi_x.value()
         self.roi_y = self.slider_roi_y.value()
         self.label_roi_info.setText(f"Posição: X={self.roi_x} | Y={self.roi_y}")
-        self.floating_overlay.update()
+        if hasattr(self, 'floating_overlay') and self.floating_overlay:
+            self.floating_overlay.update()
 
     def center_roi(self):
         max_x = max(0, self.current_mode_width - self.roi_w)
@@ -530,7 +532,8 @@ class CameraControlWindow(QWidget):
             if self.slider_roi_y.value() > max_y:
                 self.slider_roi_y.setValue(max_y)
             self.roi_controls_widget.setEnabled(self.check_roi.isChecked())
-        self.floating_overlay.update()
+        if hasattr(self, 'floating_overlay') and self.floating_overlay:
+            self.floating_overlay.update()
 
     def toggle_gain_controls(self):
         is_auto = self.check_auto_gain.isChecked()
