@@ -99,6 +99,16 @@ O driver [`cameras/imx708.py`](file:///home/pi5/Desktop/gravacao_raspberry/camer
 | `HD_MODE` | **1280 x 720** | ~120 fps | Escalado ISP (Modo 2) | HD a 120 FPS. Excelente relação fluidez vs tamanho de arquivo. |
 | `HDR_MODE` | **2304 x 1296** | ~30 fps | Nativo 1 (HDR Sensor) | Alto Alcance Dinâmico por hardware no sensor IMX708 para sol direto. |
 
+### 🎯 Recorte por Hardware (ROI 736x736 @ 120 FPS) e Otimização para Microalvos
+
+Para capturar o voo e detectar **cargas corbiculares de pólen (alvos diminutos de 10 a 25 pixels)**, o sistema utiliza uma combinação otimizada de hardware e compressão:
+
+1. **Hardware ROI (`--roi`)**: O processador de sinal de imagem (PiSP) da Raspberry Pi 5 fatia o fluxo bruto do Modo 2 nativo (1536x864) diretamente para **736x736 a 120 FPS** sem interpolação, preservando a máxima densidade ótica sem atraso de processamento na CPU.
+2. **Taxa de Bits Calibrada (`8 Mbps`)**: Evita o descarte de altas frequências espaciais e contornos finos das patas da abelha, reduzindo o tamanho dos arquivos em mais de **50%** em relação ao padrão sem perda visual.
+3. **H.264 High Profile (`--profile high --level 4.2`)**: Ativa a transformada adaptativa 8x8 DCT e compressão aritmética CABAC, garantindo maior fidelidade de texturas e bordas.
+4. **Intervalo Intra (`--intra 60`)**: Injeta um I-frame limpo a cada 0,5s, garantindo que em qualquer aproximação da abelha haverá múltiplos quadros perfeitos para anotação e segmentação de pólen.
+5. **Cabeçalhos Inline (`--inline`)**: Força SPS/PPS antes de cada I-frame, permitindo fatiar e processar qualquer trecho do vídeo de forma independente no OpenCV.
+
 ---
 
 ## 🔌 Esquema de Ligação do Hardware

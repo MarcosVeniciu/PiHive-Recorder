@@ -90,6 +90,8 @@ class IMX708Camera(BaseCamera):
         "ROI_HEIGHT": 736,
         "ROI_X": 400,
         "ROI_Y": 64,
+        "VIDEO_BITRATE": 8000000,
+        "VIDEO_INTRA": 60,
     }
 
     @property
@@ -119,7 +121,7 @@ class IMX708Camera(BaseCamera):
                             settings[k] = float(v)
                         elif k in ("AWB_ENABLE", "AUTO_GAIN", "HDR_ENABLE", "ROI_ENABLE"):
                             settings[k] = v.lower() == "true"
-                        elif k in ("ROI_WIDTH", "ROI_HEIGHT", "ROI_X", "ROI_Y"):
+                        elif k in ("ROI_WIDTH", "ROI_HEIGHT", "ROI_X", "ROI_Y", "VIDEO_BITRATE", "VIDEO_INTRA"):
                             settings[k] = int(float(v))
                         elif k == "METERING":
                             settings[k] = v
@@ -147,6 +149,10 @@ class IMX708Camera(BaseCamera):
         ev_val = settings.get("EXPOSURE_VALUE", 0.0)
         metering = settings.get("METERING", "matrix")
         
+        # Parâmetros de codificação e compressão otimizados para microalvos (Pólen corbicular)
+        bitrate = settings.get("VIDEO_BITRATE", 8000000)
+        intra = settings.get("VIDEO_INTRA", 60)
+
         # Suporte a HDR nativo do sensor IMX708
         use_hdr = mode_info.get("is_hdr", False) or settings.get("HDR_ENABLE", False)
 
@@ -181,9 +187,13 @@ class IMX708Camera(BaseCamera):
             "--width", str(out_width),
             "--height", str(out_height),
             "--framerate", str(fps),
+            "--bitrate", str(bitrate),
+            "--profile", "high",
+            "--level", "4.2",
+            "--intra", str(intra),
+            "--inline",
             "--lens-position", str(lens),
             "--nopreview",
-            "--inline",
             "--metering", str(metering),
             "--denoise", "cdn_off",
             "--shutter", str(shutter),

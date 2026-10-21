@@ -166,7 +166,9 @@ def load_settings():
         "ROI_WIDTH": 736,
         "ROI_HEIGHT": 736,
         "ROI_X": 400,
-        "ROI_Y": 64
+        "ROI_Y": 64,
+        "VIDEO_BITRATE": 8000000,
+        "VIDEO_INTRA": 60
     }
     try:
         config_map = {}
@@ -202,6 +204,9 @@ def load_settings():
         raw_y = config_map.get("ROI_Y", None)
         roi_x = int(float(raw_x)) if (raw_x is not None and int(float(raw_x)) > 0) else def_roi_x
         roi_y = int(float(raw_y)) if (raw_y is not None and int(float(raw_y)) > 0) else def_roi_y
+
+        video_bitrate = int(float(config_map.get("VIDEO_BITRATE", defaults["VIDEO_BITRATE"])))
+        video_intra = int(float(config_map.get("VIDEO_INTRA", defaults["VIDEO_INTRA"])))
         
         return {
             "MODE": mode, 
@@ -215,7 +220,9 @@ def load_settings():
             "ROI_WIDTH": roi_w,
             "ROI_HEIGHT": roi_h,
             "ROI_X": roi_x,
-            "ROI_Y": roi_y
+            "ROI_Y": roi_y,
+            "VIDEO_BITRATE": video_bitrate,
+            "VIDEO_INTRA": video_intra
         }
 
     except Exception as e:
@@ -232,7 +239,9 @@ def load_settings():
             "ROI_WIDTH": 736,
             "ROI_HEIGHT": 736,
             "ROI_X": 400,
-            "ROI_Y": 64
+            "ROI_Y": 64,
+            "VIDEO_BITRATE": 8000000,
+            "VIDEO_INTRA": 60
         }
 
 class CameraControlWindow(QWidget):
@@ -244,6 +253,8 @@ class CameraControlWindow(QWidget):
         self.setWindowTitle("Controle e Preview da Câmera (IMX708)")
         
         self.current_focus_internal = int(self.initial_config["LENS_POSITION"] * 100)
+        self.video_bitrate = self.initial_config.get("VIDEO_BITRATE", 8000000)
+        self.video_intra = self.initial_config.get("VIDEO_INTRA", 60)
         
         # --- Parâmetros de Recorte de Área de Interesse (ROI) ---
         self.roi_enabled = self.initial_config.get("ROI_ENABLE", True)
@@ -767,7 +778,9 @@ class CameraControlWindow(QWidget):
                     f.write(f"ROI_HEIGHT: {self.roi_h}\n")
                     f.write(f"ROI_X: {self.roi_x}\n")
                     f.write(f"ROI_Y: {self.roi_y}\n")
-                print(f"[LOG] Configurações salvas em {SETTINGS_FILE}. Modo: {current_mode_key}, ROI: {self.check_roi.isChecked()} ({self.roi_w}x{self.roi_h} em X={self.roi_x}, Y={self.roi_y})")
+                    f.write(f"VIDEO_BITRATE: {self.video_bitrate}\n")
+                    f.write(f"VIDEO_INTRA: {self.video_intra}\n")
+                print(f"[LOG] Configurações salvas em {SETTINGS_FILE}. Modo: {current_mode_key}, ROI: {self.check_roi.isChecked()} ({self.roi_w}x{self.roi_h}), Bitrate: {self.video_bitrate} bps, Intra: {self.video_intra}")
 
         except Exception as e:
             print(f"[ERRO] Erro ao aplicar configurações: {e}")
