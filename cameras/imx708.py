@@ -76,7 +76,7 @@ class IMX708Camera(BaseCamera):
     }
 
     DEFAULT_SETTINGS: Dict[str, Any] = {
-        "MODE": "HIGH_QUALITY",
+        "MODE": "HIGH_SPEED",
         "SHUTTER_SPEED": 8000,
         "ANALOGUE_GAIN": 10.0,
         "LENS_POSITION": 0.0,
@@ -85,7 +85,7 @@ class IMX708Camera(BaseCamera):
         "EXPOSURE_VALUE": 0.0,
         "HDR_ENABLE": False,
         "METERING": "matrix",
-        "ROI_ENABLE": False,
+        "ROI_ENABLE": True,
         "ROI_WIDTH": 736,
         "ROI_HEIGHT": 736,
         "ROI_X": 400,

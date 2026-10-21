@@ -39,53 +39,74 @@ SETTINGS_FILE = config.SETTINGS_FILE
 class FloatingOverlay(QWidget):
     """
     Uma janela separada, transparente e sem bordas, que flutua sobre o vídeo.
-    Isso garante que o desenho apareça mesmo sobre renderização HW.
+    Garante que os desenhos da mira e recorte apareçam sobre a renderização OpenGL do PiCamera2.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Configurações para ser uma janela transparente "fantasma"
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WA_NoSystemBackground)
+
+    def get_video_rect(self):
+        """Retorna (x_off, y_off, w, h) da área real do vídeo dentro do preview_widget, excluindo barras pretas."""
+        parent = self.parent()
+        if parent and hasattr(parent, "preview_widget") and parent.preview_widget:
+            try:
+                x_off, y_off, w, h = parent.preview_widget.recalculate_viewport()
+                if w > 0 and h > 0:
+                    return x_off, y_off, w, h
+            except Exception:
+                pass
+        return 0, 0, self.width(), self.height()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
         parent = self.parent()
+        vx, vy, vw, vh = self.get_video_rect()
         
         # Se o recorte ROI estiver ativado, desenha a caixa de enquadramento
         if parent and getattr(parent, "roi_enabled", False):
             mode_w = max(1, getattr(parent, "current_mode_width", 1536))
             mode_h = max(1, getattr(parent, "current_mode_height", 864))
             
-            # Escala as coordenadas do sensor para o tamanho visual do widget de preview
-            scale_x = self.width() / mode_w
-            scale_y = self.height() / mode_h
+            # Escala estritamente dentro da área real da imagem do sensor (sem invadir bordas pretas)
+            scale_x = vw / mode_w
+            scale_y = vh / mode_h
             
-            bx = int(parent.roi_x * scale_x)
-            by = int(parent.roi_y * scale_y)
+            bx = vx + int(parent.roi_x * scale_x)
+            by = vy + int(parent.roi_y * scale_y)
             bw = int(parent.roi_w * scale_x)
             bh = int(parent.roi_h * scale_y)
             
-            # 1. Máscara escura suave na área externa que será descartada
-            painter.setBrush(QColor(0, 0, 0, 110))
+            # 1. Máscara escura apenas dentro da área de vídeo ativa (fora do recorte)
+            painter.setBrush(QColor(0, 0, 0, 125))
             painter.setPen(Qt.NoPen)
-            painter.drawRect(0, 0, self.width(), by)
-            painter.drawRect(0, by + bh, self.width(), self.height() - (by + bh))
-            painter.drawRect(0, by, bx, bh)
-            painter.drawRect(bx + bw, by, self.width() - (bx + bw), bh)
+            if by > vy:
+                painter.drawRect(vx, vy, vw, by - vy)
+            if (vy + vh) > (by + bh):
+                painter.drawRect(vx, by + bh, vw, (vy + vh) - (by + bh))
+            if bx > vx:
+                painter.drawRect(vx, by, bx - vx, bh)
+            if (vx + vw) > (bx + bw):
+                painter.drawRect(bx + bw, by, (vx + vw) - (bx + bw), bh)
             
-            # 2. Retângulo demarcador de corte
-            pen_box = QPen(QColor(255, 40, 40), 3)
+            # 2. Borda sutil delimitando o quadro do sensor ativo (para contraste com bordas pretas)
+            painter.setPen(QPen(QColor(120, 120, 120, 180), 1, Qt.DashLine))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(vx, vy, vw, vh)
+
+            # 3. Retângulo demarcador de corte (vermelho vivo com espessura 3)
+            pen_box = QPen(QColor(255, 30, 30), 3)
             pen_box.setStyle(Qt.SolidLine)
             painter.setPen(pen_box)
             painter.setBrush(Qt.NoBrush)
             painter.drawRect(bx, by, bw, bh)
             
-            # 3. Mira central suave no meio do enquadramento
-            pen_cross = QPen(QColor(255, 255, 255, 200), 1)
+            # 4. Mira central suave no meio do enquadramento
+            pen_cross = QPen(QColor(255, 255, 255, 220), 1)
             pen_cross.setStyle(Qt.DashLine)
             painter.setPen(pen_cross)
             cx = bx + bw // 2
@@ -93,51 +114,55 @@ class FloatingOverlay(QWidget):
             painter.drawLine(cx - 20, cy, cx + 20, cy)
             painter.drawLine(cx, cy - 20, cx, cy + 20)
             
-            # 4. Etiqueta informativa
-            painter.setBrush(QColor(220, 20, 20, 220))
+            # 5. Etiqueta informativa posicionada sem invadir bordas pretas externas
+            tag_w = 230
+            tag_h = 24
+            tag_y = (by - tag_h - 2) if (by - tag_h - 2) >= vy else (by + 4)
+            tag_x = max(vx + 4, min(bx, vx + vw - tag_w - 4))
+            
+            painter.setBrush(QColor(220, 20, 20, 230))
             painter.setPen(Qt.NoPen)
-            painter.drawRect(bx, max(0, by - 26), 230, 24)
+            painter.drawRect(tag_x, tag_y, tag_w, tag_h)
             
             painter.setPen(QPen(QColor(255, 255, 255), 1))
             font = QFont()
             font.setBold(True)
             font.setPointSize(9)
             painter.setFont(font)
-            painter.drawText(bx + 8, max(0, by - 26) + 16, f"REC HW: {parent.roi_w}x{parent.roi_h} (120 FPS)")
+            painter.drawText(tag_x + 8, tag_y + 16, f"REC HW: {parent.roi_w}x{parent.roi_h} (120 FPS)")
             
         else:
-            # Modo padrão sem ROI: linha guia central
+            # Modo padrão sem ROI: linha guia central alinhada ao vídeo real
             pen = QPen(QColor(255, 0, 0), 2)
             pen.setStyle(Qt.DashLine)
             painter.setPen(pen)
             
-            x_center = int(self.width() / 2)
-            height = self.height()
-            painter.drawLine(x_center, 0, x_center, height)
+            x_center = vx + vw // 2
+            painter.drawLine(x_center, vy, x_center, vy + vh)
             
             # Fundo preto semi-transparente para legibilidade
             painter.setBrush(QColor(0, 0, 0, 150))
             painter.setPen(Qt.NoPen)
-            painter.drawRect(x_center - 130, 10, 260, 30)
+            painter.drawRect(x_center - 130, vy + 10, 260, 30)
             
             painter.setPen(QPen(QColor(255, 255, 255), 1))
             font = QFont()
             font.setBold(True)
             font.setPointSize(10)
             painter.setFont(font)
-            painter.drawText(x_center - 120, 30, "◄ LADO ESQUERDO | LADO DIREITO ►")
+            painter.drawText(x_center - 120, vy + 30, "◄ LADO ESQUERDO | LADO DIREITO ►")
 
 def load_settings():
     print("[LOG] Iniciando o carregamento das configurações...")
     defaults = {
-        "MODE": "HIGH_QUALITY",
+        "MODE": "HIGH_SPEED",
         "SHUTTER_SPEED": 8000,
         "ANALOGUE_GAIN": 10.0,
         "LENS_POSITION": 0.0,
         "AWB_ENABLE": "True",
         "AUTO_GAIN": "False",
         "EXPOSURE_VALUE": 0.0,
-        "ROI_ENABLE": "False",
+        "ROI_ENABLE": "True",
         "ROI_WIDTH": 736,
         "ROI_HEIGHT": 736,
         "ROI_X": 400,
@@ -166,8 +191,17 @@ def load_settings():
         roi_enable = config_map.get("ROI_ENABLE", defaults["ROI_ENABLE"]) == "True"
         roi_w = int(float(config_map.get("ROI_WIDTH", defaults["ROI_WIDTH"])))
         roi_h = int(float(config_map.get("ROI_HEIGHT", defaults["ROI_HEIGHT"])))
-        roi_x = int(float(config_map.get("ROI_X", defaults["ROI_X"])))
-        roi_y = int(float(config_map.get("ROI_Y", defaults["ROI_Y"])))
+
+        # Posição padrão sempre calculada centralizada para o modo carregado
+        mode_res = CAMERA_MODES.get(mode, {}).get("resolution", (1536, 864))
+        def_roi_x = max(0, (mode_res[0] - roi_w) // 2)
+        def_roi_y = max(0, (mode_res[1] - roi_h) // 2)
+
+        # Se não configurado ou se estava zerado, utiliza o centro padrão
+        raw_x = config_map.get("ROI_X", None)
+        raw_y = config_map.get("ROI_Y", None)
+        roi_x = int(float(raw_x)) if (raw_x is not None and int(float(raw_x)) > 0) else def_roi_x
+        roi_y = int(float(raw_y)) if (raw_y is not None and int(float(raw_y)) > 0) else def_roi_y
         
         return {
             "MODE": mode, 
@@ -194,7 +228,7 @@ def load_settings():
             "AWB_ENABLE": True,
             "AUTO_GAIN": False,
             "EXPOSURE_VALUE": 0.0,
-            "ROI_ENABLE": False,
+            "ROI_ENABLE": True,
             "ROI_WIDTH": 736,
             "ROI_HEIGHT": 736,
             "ROI_X": 400,
@@ -212,14 +246,18 @@ class CameraControlWindow(QWidget):
         self.current_focus_internal = int(self.initial_config["LENS_POSITION"] * 100)
         
         # --- Parâmetros de Recorte de Área de Interesse (ROI) ---
-        self.roi_enabled = self.initial_config.get("ROI_ENABLE", False)
+        self.roi_enabled = self.initial_config.get("ROI_ENABLE", True)
         self.roi_w = self.initial_config.get("ROI_WIDTH", 736)
         self.roi_h = self.initial_config.get("ROI_HEIGHT", 736)
-        self.roi_x = self.initial_config.get("ROI_X", 400)
-        self.roi_y = self.initial_config.get("ROI_Y", 64)
         
-        init_mode = self.initial_config.get("MODE", "HIGH_QUALITY")
-        self.current_mode_width, self.current_mode_height = CAMERA_MODES.get(init_mode, {}).get("resolution", (2304, 1296))
+        init_mode = self.initial_config.get("MODE", "HIGH_SPEED")
+        self.current_mode_width, self.current_mode_height = CAMERA_MODES.get(init_mode, {}).get("resolution", (1536, 864))
+
+        # Garantir centralização se os valores forem padrão ou excederem o modo
+        max_x = max(0, self.current_mode_width - self.roi_w)
+        max_y = max(0, self.current_mode_height - self.roi_h)
+        self.roi_x = min(max_x, self.initial_config.get("ROI_X", max_x // 2))
+        self.roi_y = min(max_y, self.initial_config.get("ROI_Y", max_y // 2))
 
         main_layout = QVBoxLayout()
 
@@ -459,31 +497,80 @@ class CameraControlWindow(QWidget):
         self.roi_controls_widget = QWidget()
         ctrls_layout = QVBoxLayout(self.roi_controls_widget)
         ctrls_layout.setContentsMargins(0, 0, 0, 0)
-        ctrls_layout.setSpacing(4)
+        ctrls_layout.setSpacing(6)
 
-        self.label_roi_info = QLabel(f"Posição: X={self.roi_x} | Y={self.roi_y}")
-        self.label_roi_info.setStyleSheet("font-weight: bold; color: #D32F2F;")
-        ctrls_layout.addWidget(self.label_roi_info)
+        value_style = """
+            QLabel {
+                background-color: #FFFFFF;
+                border: 1px solid #CCCCCC;
+                border-radius: 5px;
+                padding: 4px;
+                font-weight: bold;
+                font-size: 13px;
+                min-width: 55px;
+            }
+        """
 
-        lbl_x = QLabel("Deslocamento X (Horizontal):")
-        self.slider_roi_x = QSlider(Qt.Horizontal)
-        self.slider_roi_x.setMinimum(0)
-        self.slider_roi_x.setMaximum(max(0, self.current_mode_width - self.roi_w))
-        self.slider_roi_x.setValue(self.roi_x)
-        self.slider_roi_x.valueChanged.connect(self.on_roi_slider_changed)
-        ctrls_layout.addWidget(lbl_x)
-        ctrls_layout.addWidget(self.slider_roi_x)
+        # Linha X (Horizontal) com botões de passo (fácil de tocar no celular)
+        layout_x = QHBoxLayout()
+        lbl_x = QLabel("X (Horiz):")
+        lbl_x.setMinimumWidth(65)
+        self.label_roi_x_val = QLabel(str(self.roi_x))
+        self.label_roi_x_val.setStyleSheet(value_style)
+        self.label_roi_x_val.setAlignment(Qt.AlignCenter)
+        
+        btn_x_m50 = QPushButton("-50")
+        btn_x_m10 = QPushButton("-10")
+        btn_x_p10 = QPushButton("+10")
+        btn_x_p50 = QPushButton("+50")
+        for b in (btn_x_m50, btn_x_m10, btn_x_p10, btn_x_p50):
+            b.setMinimumHeight(32)
+        
+        btn_x_m50.clicked.connect(partial(self.adjust_roi_x, -50))
+        btn_x_m10.clicked.connect(partial(self.adjust_roi_x, -10))
+        btn_x_p10.clicked.connect(partial(self.adjust_roi_x, 10))
+        btn_x_p50.clicked.connect(partial(self.adjust_roi_x, 50))
 
-        lbl_y = QLabel("Deslocamento Y (Vertical):")
-        self.slider_roi_y = QSlider(Qt.Horizontal)
-        self.slider_roi_y.setMinimum(0)
-        self.slider_roi_y.setMaximum(max(0, self.current_mode_height - self.roi_h))
-        self.slider_roi_y.setValue(self.roi_y)
-        self.slider_roi_y.valueChanged.connect(self.on_roi_slider_changed)
-        ctrls_layout.addWidget(lbl_y)
-        ctrls_layout.addWidget(self.slider_roi_y)
+        layout_x.addWidget(lbl_x)
+        layout_x.addWidget(btn_x_m50)
+        layout_x.addWidget(btn_x_m10)
+        layout_x.addWidget(self.label_roi_x_val)
+        layout_x.addWidget(btn_x_p10)
+        layout_x.addWidget(btn_x_p50)
+        ctrls_layout.addLayout(layout_x)
 
-        btn_center = QPushButton("Centralizar Recorte")
+        # Linha Y (Vertical) com botões de passo
+        layout_y = QHBoxLayout()
+        lbl_y = QLabel("Y (Vert):")
+        lbl_y.setMinimumWidth(65)
+        self.label_roi_y_val = QLabel(str(self.roi_y))
+        self.label_roi_y_val.setStyleSheet(value_style)
+        self.label_roi_y_val.setAlignment(Qt.AlignCenter)
+
+        btn_y_m50 = QPushButton("-50")
+        btn_y_m10 = QPushButton("-10")
+        btn_y_p10 = QPushButton("+10")
+        btn_y_p50 = QPushButton("+50")
+        for b in (btn_y_m50, btn_y_m10, btn_y_p10, btn_y_p50):
+            b.setMinimumHeight(32)
+
+        btn_y_m50.clicked.connect(partial(self.adjust_roi_y, -50))
+        btn_y_m10.clicked.connect(partial(self.adjust_roi_y, -10))
+        btn_y_p10.clicked.connect(partial(self.adjust_roi_y, 10))
+        btn_y_p50.clicked.connect(partial(self.adjust_roi_y, 50))
+
+        layout_y.addWidget(lbl_y)
+        layout_y.addWidget(btn_y_m50)
+        layout_y.addWidget(btn_y_m10)
+        layout_y.addWidget(self.label_roi_y_val)
+        layout_y.addWidget(btn_y_p10)
+        layout_y.addWidget(btn_y_p50)
+        ctrls_layout.addLayout(layout_y)
+
+        # Botão Centralizar Recorte
+        btn_center = QPushButton("🎯 Centralizar Recorte")
+        btn_center.setMinimumHeight(34)
+        btn_center.setToolTip("Centraliza a área de corte 736x736 no sensor ativo.")
         btn_center.clicked.connect(self.center_roi)
         ctrls_layout.addWidget(btn_center)
 
@@ -500,18 +587,33 @@ class CameraControlWindow(QWidget):
         if hasattr(self, 'floating_overlay') and self.floating_overlay:
             self.floating_overlay.update()
 
-    def on_roi_slider_changed(self):
-        self.roi_x = self.slider_roi_x.value()
-        self.roi_y = self.slider_roi_y.value()
-        self.label_roi_info.setText(f"Posição: X={self.roi_x} | Y={self.roi_y}")
+    def adjust_roi_x(self, delta):
+        max_x = max(0, self.current_mode_width - self.roi_w)
+        self.roi_x = max(0, min(max_x, self.roi_x + delta))
+        if hasattr(self, 'label_roi_x_val'):
+            self.label_roi_x_val.setText(str(self.roi_x))
+        if hasattr(self, 'floating_overlay') and self.floating_overlay:
+            self.floating_overlay.update()
+
+    def adjust_roi_y(self, delta):
+        max_y = max(0, self.current_mode_height - self.roi_h)
+        self.roi_y = max(0, min(max_y, self.roi_y + delta))
+        if hasattr(self, 'label_roi_y_val'):
+            self.label_roi_y_val.setText(str(self.roi_y))
         if hasattr(self, 'floating_overlay') and self.floating_overlay:
             self.floating_overlay.update()
 
     def center_roi(self):
         max_x = max(0, self.current_mode_width - self.roi_w)
         max_y = max(0, self.current_mode_height - self.roi_h)
-        self.slider_roi_x.setValue(max_x // 2)
-        self.slider_roi_y.setValue(max_y // 2)
+        self.roi_x = max_x // 2
+        self.roi_y = max_y // 2
+        if hasattr(self, 'label_roi_x_val'):
+            self.label_roi_x_val.setText(str(self.roi_x))
+        if hasattr(self, 'label_roi_y_val'):
+            self.label_roi_y_val.setText(str(self.roi_y))
+        if hasattr(self, 'floating_overlay') and self.floating_overlay:
+            self.floating_overlay.update()
 
     def update_roi_limits(self):
         can_support = (self.current_mode_width >= self.roi_w and self.current_mode_height >= self.roi_h)
@@ -525,12 +627,14 @@ class CameraControlWindow(QWidget):
             self.check_roi.setToolTip("Gravar recorte direto de 736x736 pelo hardware da câmera.")
             max_x = max(0, self.current_mode_width - self.roi_w)
             max_y = max(0, self.current_mode_height - self.roi_h)
-            self.slider_roi_x.setMaximum(max_x)
-            self.slider_roi_y.setMaximum(max_y)
-            if self.slider_roi_x.value() > max_x:
-                self.slider_roi_x.setValue(max_x)
-            if self.slider_roi_y.value() > max_y:
-                self.slider_roi_y.setValue(max_y)
+            if self.roi_x > max_x:
+                self.roi_x = max_x
+            if self.roi_y > max_y:
+                self.roi_y = max_y
+            if hasattr(self, 'label_roi_x_val'):
+                self.label_roi_x_val.setText(str(self.roi_x))
+            if hasattr(self, 'label_roi_y_val'):
+                self.label_roi_y_val.setText(str(self.roi_y))
             self.roi_controls_widget.setEnabled(self.check_roi.isChecked())
         if hasattr(self, 'floating_overlay') and self.floating_overlay:
             self.floating_overlay.update()
@@ -586,6 +690,7 @@ class CameraControlWindow(QWidget):
                     mode_info = CAMERA_MODES.get(key, {})
                     self.current_mode_width, self.current_mode_height = mode_info.get("resolution", (2304, 1296))
                     break
+            self.center_roi()
             self.update_roi_limits()
             self.reconfigure_camera_and_apply(is_initial_setup=True)
 
@@ -688,7 +793,6 @@ if __name__ == "__main__":
     picam2 = Picamera2()
 
     window = CameraControlWindow(picam2, loaded_config)
-    window.resize(1180, 750)
-    window.show()
+    window.showMaximized()
     
     sys.exit(app.exec())
