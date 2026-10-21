@@ -1,0 +1,531 @@
+# --- MODIFICADO (VERSÃO COM CONTROLE DE EV) ---
+# Câmera de referência e modos disponíveis para o sensor imx708.
+# -----------------------------------------------------------------
+# Available cameras
+# -----------------
+# 0 : imx708 [4608x2592 10-bit RGGB] (/base/axi/pcie@1000120000/rp1/i2c@88000/imx708@1a)
+#     Modes: 'SRGGB10_CSI2P' : 1536x864 [120.13 fps - (768, 432)/3072x1728 crop]
+#                              2304x1296 [56.03 fps - (0, 0)/4608x2592 crop]
+#                              4608x2592 [14.35 fps - (0, 0)/4608x2592 crop]
+# -----------------------------------------------------------------
+
+import sys
+import traceback
+from picamera2 import Picamera2
+from picamera2.previews.qt import QGlPicamera2
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QFrame, QGroupBox, 
+    QRadioButton, QSlider, QCheckBox, QStackedLayout
+)
+from PyQt5.QtCore import QSize, Qt, QTimer, QEvent
+from PyQt5.QtGui import QSurfaceFormat, QPainter, QPen, QColor, QFont
+from functools import partial 
+
+# --- CONFIGURAÇÃO DA CÂMERA ---
+CAMERA_MODES = {
+    "HIGH_QUALITY": {
+        "label": "2304x1296 ~56 FPS (Qualidade Máxima)",
+        "resolution": (2304, 1296),
+        "fps": 56,
+        "bit_depth": 10
+    },
+    "FHD_MODE": {
+        "label": "1920x1080 ~56 FPS (FHD)",
+        "resolution": (1920, 1080),
+        "fps": 56,
+        "bit_depth": 10
+    },
+    "HD_MODE": {
+        "label": "1280x720 ~120 FPS (HD)",
+        "resolution": (1280, 720),
+        "fps": 120,
+        "bit_depth": 10
+    },
+    "HIGH_SPEED": {
+        "label": "1536x864 ~120 FPS (Alta Velocidade)",
+        "resolution": (1536, 864),
+        "fps": 120,
+        "bit_depth": 10
+    }
+}
+
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import config
+SETTINGS_FILE = config.SETTINGS_FILE
+
+class FloatingOverlay(QWidget):
+    """
+    Uma janela separada, transparente e sem bordas, que flutua sobre o vídeo.
+    Isso garante que o desenho apareça mesmo sobre renderização HW.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Configurações para ser uma janela transparente "fantasma"
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # --- Desenho da Linha ---
+        pen = QPen(QColor(255, 0, 0), 2)
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+        
+        x_center = int(self.width() / 2)
+        height = self.height()
+        
+        painter.drawLine(x_center, 0, x_center, height)
+        
+        # --- Desenho do Texto ---
+        # Fundo preto semi-transparente para legibilidade
+        painter.setBrush(QColor(0, 0, 0, 150))
+        painter.setPen(Qt.NoPen)
+        painter.drawRect(x_center - 130, 10, 260, 30)
+        
+        painter.setPen(QPen(QColor(255, 255, 255), 1))
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(10)
+        painter.setFont(font)
+        
+        # AQUI MANTEMOS A MENSAGEM ORIGINAL POIS O ROI FOI REMOVIDO DO GRAVADOR
+        # MAS A LINHA AINDA SERVE DE REFERÊNCIA VISUAL PARA O CENTRO
+        painter.drawText(x_center - 120, 30, "◄ LADO ESQUERDO | LADO DIREITO ►")
+
+def load_settings():
+    print("[LOG] Iniciando o carregamento das configurações...")
+    defaults = {
+        "MODE": "HIGH_QUALITY",
+        "SHUTTER_SPEED": 8000,
+        "ANALOGUE_GAIN": 10.0,
+        "LENS_POSITION": 0.0,
+        "AWB_ENABLE": "True",
+        "AUTO_GAIN": "False",
+        "EXPOSURE_VALUE": 0.0 # Novo Padrão
+    }
+    try:
+        config = {}
+        with open(SETTINGS_FILE, 'r') as f:
+            for line in f:
+                if ':' in line:
+                    key, value = line.strip().split(':', 1)
+                    config[key.strip()] = value.strip()
+        
+        mode = config.get("MODE", defaults["MODE"])
+        if mode not in CAMERA_MODES:
+            mode = defaults["MODE"]
+            
+        shutter = int(float(config.get("SHUTTER_SPEED", defaults["SHUTTER_SPEED"])))
+        gain = float(config.get("ANALOGUE_GAIN", defaults["ANALOGUE_GAIN"]))
+        lens_pos = float(config.get("LENS_POSITION", defaults["LENS_POSITION"]))
+        awb_enable = config.get("AWB_ENABLE", defaults["AWB_ENABLE"]) == "True"
+        auto_gain = config.get("AUTO_GAIN", defaults["AUTO_GAIN"]) == "True"
+        ev_val = float(config.get("EXPOSURE_VALUE", defaults["EXPOSURE_VALUE"]))
+        
+        return {
+            "MODE": mode, 
+            "SHUTTER_SPEED": shutter, 
+            "ANALOGUE_GAIN": gain, 
+            "LENS_POSITION": lens_pos,
+            "AWB_ENABLE": awb_enable,
+            "AUTO_GAIN": auto_gain,
+            "EXPOSURE_VALUE": ev_val
+        }
+
+    except (FileNotFoundError, ValueError):
+        defaults["AWB_ENABLE"] = True 
+        defaults["AUTO_GAIN"] = False
+        return defaults
+
+class CameraControlWindow(QWidget):
+    def __init__(self, picam2, initial_config):
+        super().__init__()
+        print("[LOG] Inicializando a janela de controle da câmera...")
+        self.picam2 = picam2
+        self.initial_config = initial_config
+        self.setWindowTitle("Controle e Preview da Câmera (IMX708)")
+        
+        self.current_focus_internal = int(self.initial_config["LENS_POSITION"] * 100)
+        
+        main_layout = QVBoxLayout()
+
+        # Container do Vídeo
+        self.video_container = QWidget()
+        video_layout = QVBoxLayout(self.video_container)
+        video_layout.setContentsMargins(0,0,0,0)
+        
+        self.preview_widget = QGlPicamera2(self.picam2)
+        video_layout.addWidget(self.preview_widget)
+        
+        main_layout.addWidget(self.video_container, stretch=5)
+
+        # Painel de controle
+        control_panel = self.create_control_panel()
+        main_layout.addWidget(control_panel, stretch=1)
+
+        self.setLayout(main_layout)
+        
+        # --- CONFIGURAÇÃO DO OVERLAY FLUTUANTE ---
+        self.floating_overlay = FloatingOverlay(self) 
+        self.floating_overlay.show()
+        
+        # Timer para sincronizar a posição do overlay com o vídeo
+        self.sync_timer = QTimer(self)
+        self.sync_timer.timeout.connect(self.update_overlay_position)
+        self.sync_timer.start(30) 
+
+        self.reconfigure_camera_and_apply(is_initial_setup=True)
+        print("[LOG] Janela de controle inicializada com sucesso.")
+
+    def update_overlay_position(self):
+        """Mantém a linha vermelha colada em cima do vídeo, mesmo se mover a janela."""
+        if self.isVisible() and self.preview_widget.isVisible():
+            global_pos = self.preview_widget.mapToGlobal(self.preview_widget.rect().topLeft())
+            self.floating_overlay.setGeometry(
+                global_pos.x(), 
+                global_pos.y(), 
+                self.preview_widget.width(), 
+                self.preview_widget.height()
+            )
+            self.floating_overlay.show()
+        else:
+            self.floating_overlay.hide()
+
+    def moveEvent(self, event):
+        self.update_overlay_position()
+        super().moveEvent(event)
+        
+    def resizeEvent(self, event):
+        self.update_overlay_position()
+        super().resizeEvent(event)
+
+    def create_control_panel(self):
+        panel_frame = QFrame()
+        panel_layout = QHBoxLayout(panel_frame)
+        panel_layout.setSpacing(15)
+        panel_layout.setContentsMargins(10, 10, 10, 10)
+
+        # --- Grupo de Modo ---
+        mode_groupbox = QGroupBox("Modo de Câmera")
+        mode_layout = QVBoxLayout()
+        
+        self.radio_high_quality = QRadioButton(CAMERA_MODES["HIGH_QUALITY"]["label"])
+        self.radio_fhd = QRadioButton(CAMERA_MODES["FHD_MODE"]["label"])
+        self.radio_hd = QRadioButton(CAMERA_MODES["HD_MODE"]["label"])
+        self.radio_high_speed = QRadioButton(CAMERA_MODES["HIGH_SPEED"]["label"])
+
+        current_mode = self.initial_config["MODE"]
+        self.radio_high_quality.setChecked(current_mode == "HIGH_QUALITY")
+        self.radio_fhd.setChecked(current_mode == "FHD_MODE")
+        self.radio_hd.setChecked(current_mode == "HD_MODE")
+        self.radio_high_speed.setChecked(current_mode == "HIGH_SPEED")
+
+        if not any([r.isChecked() for r in [self.radio_high_quality, self.radio_fhd, self.radio_hd, self.radio_high_speed]]):
+            self.radio_high_quality.setChecked(True)
+
+        self.radio_high_quality.toggled.connect(self.on_mode_change)
+        self.radio_fhd.toggled.connect(self.on_mode_change)
+        self.radio_hd.toggled.connect(self.on_mode_change)
+        self.radio_high_speed.toggled.connect(self.on_mode_change)
+        
+        mode_layout.addWidget(self.radio_high_quality)
+        mode_layout.addWidget(self.radio_fhd)
+        mode_layout.addWidget(self.radio_hd)
+        mode_layout.addWidget(self.radio_high_speed)
+        
+        mode_groupbox.setLayout(mode_layout)
+        
+        # --- Estilo ---
+        value_label_style = """
+            QLabel {
+                background-color: #FFFFFF;
+                border: 1px solid #CCCCCC;
+                border-radius: 5px;
+                padding: 5px;
+                font-weight: bold;
+                font-size: 14px;
+                min-width: 70px;
+                alignment: AlignCenter;
+            }
+        """
+
+        settings_layout = QVBoxLayout()
+
+        # Shutter
+        layout_shutter = QHBoxLayout()
+        self.label_shutter_value = QLabel(str(self.initial_config["SHUTTER_SPEED"]))
+        self.label_shutter_value.setStyleSheet(value_label_style)
+        self.label_shutter_value.setAlignment(Qt.AlignCenter)
+        btn_s_m1000 = QPushButton("-1000")
+        btn_s_m100 = QPushButton("-100")
+        btn_s_p100 = QPushButton("+100")
+        btn_s_p1000 = QPushButton("+1000")
+        btn_s_m1000.clicked.connect(partial(self.adjust_shutter, -1000))
+        btn_s_m100.clicked.connect(partial(self.adjust_shutter, -100))
+        btn_s_p100.clicked.connect(partial(self.adjust_shutter, 100))
+        btn_s_p1000.clicked.connect(partial(self.adjust_shutter, 1000))
+        layout_shutter.addWidget(QLabel("Shutter (µs):"))
+        layout_shutter.addWidget(btn_s_m1000)
+        layout_shutter.addWidget(btn_s_m100)
+        layout_shutter.addWidget(self.label_shutter_value)
+        layout_shutter.addWidget(btn_s_p100)
+        layout_shutter.addWidget(btn_s_p1000)
+
+        # Gain Checkbox
+        self.check_auto_gain = QCheckBox("Ganho Automático (Prioridade de Shutter)")
+        self.check_auto_gain.setChecked(self.initial_config["AUTO_GAIN"])
+        self.check_auto_gain.setToolTip("Marcado: Câmera ajusta o brilho (Gain) mas mantém o Shutter fixo na gravação.")
+        self.check_auto_gain.stateChanged.connect(self.toggle_gain_controls)
+
+        # Gain Controls
+        self.layout_gain_controls = QHBoxLayout()
+        self.label_gain_value = QLabel(f"{self.initial_config['ANALOGUE_GAIN']:.1f}")
+        self.label_gain_value.setStyleSheet(value_label_style)
+        self.label_gain_value.setAlignment(Qt.AlignCenter)
+        self.btn_g_m10 = QPushButton("-10")
+        self.btn_g_m1 = QPushButton("-1")
+        self.btn_g_p1 = QPushButton("+1")
+        self.btn_g_p10 = QPushButton("+10")
+        
+        self.btn_g_m10.clicked.connect(partial(self.adjust_gain, -10.0))
+        self.btn_g_m1.clicked.connect(partial(self.adjust_gain, -1.0))
+        self.btn_g_p1.clicked.connect(partial(self.adjust_gain, 1.0))
+        self.btn_g_p10.clicked.connect(partial(self.adjust_gain, 10.0))
+        
+        self.layout_gain_controls.addWidget(QLabel("Ganho Manual:"))
+        self.layout_gain_controls.addWidget(self.btn_g_m10)
+        self.layout_gain_controls.addWidget(self.btn_g_m1)
+        self.layout_gain_controls.addWidget(self.label_gain_value)
+        self.layout_gain_controls.addWidget(self.btn_g_p1)
+        self.layout_gain_controls.addWidget(self.btn_g_p10)
+
+        self.gain_widget = QWidget()
+        self.gain_widget.setLayout(self.layout_gain_controls)
+
+        # --- NOVO: EV Controls ---
+        self.layout_ev_controls = QHBoxLayout()
+        self.label_ev_value = QLabel(f"{self.initial_config['EXPOSURE_VALUE']:.1f}")
+        self.label_ev_value.setStyleSheet(value_label_style)
+        self.label_ev_value.setAlignment(Qt.AlignCenter)
+        
+        btn_ev_minus = QPushButton("-0.5")
+        btn_ev_plus = QPushButton("+0.5")
+        
+        btn_ev_minus.clicked.connect(partial(self.adjust_ev, -0.5))
+        btn_ev_plus.clicked.connect(partial(self.adjust_ev, 0.5))
+        
+        self.layout_ev_controls.addWidget(QLabel("Compensação (EV):"))
+        self.layout_ev_controls.addWidget(btn_ev_minus)
+        self.layout_ev_controls.addWidget(self.label_ev_value)
+        self.layout_ev_controls.addWidget(btn_ev_plus)
+        
+        # Focus
+        layout_focus = QHBoxLayout()
+        self.label_focus_value = QLabel(f"{self.initial_config['LENS_POSITION']:.2f}")
+        self.label_focus_value.setStyleSheet(value_label_style)
+        self.label_focus_value.setAlignment(Qt.AlignCenter)
+        btn_f_m50 = QPushButton("-50")
+        btn_f_m10 = QPushButton("-10")
+        btn_f_p10 = QPushButton("+10")
+        btn_f_p50 = QPushButton("+50")
+        btn_f_m50.clicked.connect(partial(self.adjust_focus, -50))
+        btn_f_m10.clicked.connect(partial(self.adjust_focus, -10))
+        btn_f_p10.clicked.connect(partial(self.adjust_focus, 10))
+        btn_f_p50.clicked.connect(partial(self.adjust_focus, 50))
+        layout_focus.addWidget(QLabel("Foco Manual:"))
+        layout_focus.addWidget(btn_f_m50)
+        layout_focus.addWidget(btn_f_m10)
+        layout_focus.addWidget(self.label_focus_value)
+        layout_focus.addWidget(btn_f_p10)
+        layout_focus.addWidget(btn_f_p50)
+
+        # AWB Checkbox
+        layout_awb = QHBoxLayout()
+        self.check_awb = QCheckBox("AWB (Balanço de Branco Automático)")
+        self.check_awb.setChecked(self.initial_config["AWB_ENABLE"])
+        layout_awb.addWidget(self.check_awb)
+        
+        settings_layout.addLayout(layout_shutter)
+        settings_layout.addWidget(self.check_auto_gain)
+        settings_layout.addWidget(self.gain_widget)
+        settings_layout.addLayout(self.layout_ev_controls) # Adiciona EV aqui
+        settings_layout.addLayout(layout_focus)
+        settings_layout.addLayout(layout_awb)
+        
+        settings_widget = QWidget()
+        settings_widget.setLayout(settings_layout)
+
+        self.toggle_gain_controls()
+
+        self.apply_button = QPushButton("Aplicar e Salvar")
+        self.apply_button.clicked.connect(lambda: self.reconfigure_camera_and_apply(is_initial_setup=False))
+
+        self.close_button = QPushButton("Fechar Aplicativo")
+        self.close_button.clicked.connect(self.close)
+
+        actions_layout = QVBoxLayout()
+        actions_layout.addWidget(self.apply_button)
+        actions_layout.addWidget(self.close_button)
+        actions_layout.addStretch() 
+        
+        actions_widget = QWidget()
+        actions_widget.setLayout(actions_layout)
+
+        panel_layout.addWidget(mode_groupbox, stretch=2)
+        panel_layout.addWidget(settings_widget, stretch=5)
+        panel_layout.addStretch(1)
+        panel_layout.addWidget(actions_widget, stretch=2)
+        
+        return panel_frame
+
+    def toggle_gain_controls(self):
+        is_auto = self.check_auto_gain.isChecked()
+        self.gain_widget.setEnabled(not is_auto)
+        
+    def adjust_shutter(self, delta):
+        try:
+            current_value = int(self.label_shutter_value.text())
+            new_value = max(100, current_value + delta) 
+            self.label_shutter_value.setText(str(new_value))
+            self.picam2.set_controls({"ExposureTime": new_value})
+        except ValueError:
+            pass
+
+    def adjust_gain(self, delta):
+        try:
+            current_value = float(self.label_gain_value.text())
+            new_value = max(1.0, current_value + delta) 
+            self.label_gain_value.setText(f"{new_value:.1f}")
+            if not self.check_auto_gain.isChecked():
+                self.picam2.set_controls({"AnalogueGain": new_value})
+        except ValueError:
+            pass
+
+    def adjust_ev(self, delta):
+        try:
+            current_value = float(self.label_ev_value.text())
+            new_value = current_value + delta
+            # Limita entre -10 e 10 (segurança, embora -2 a 2 seja o comum)
+            if new_value > 10.0: new_value = 10.0
+            if new_value < -10.0: new_value = -10.0
+            
+            self.label_ev_value.setText(f"{new_value:.1f}")
+            # Aplica no preview se estiver em auto gain
+            if self.check_auto_gain.isChecked():
+                self.picam2.set_controls({"ExposureValue": new_value})
+        except ValueError:
+            pass
+
+    def adjust_focus(self, delta_internal):
+        self.current_focus_internal = max(0, min(1000, self.current_focus_internal + delta_internal))
+        lens_position = self.current_focus_internal / 100.0
+        self.label_focus_value.setText(f"{lens_position:.2f}")
+        self.picam2.set_controls({"LensPosition": lens_position})
+
+    def on_mode_change(self):
+        if self.sender().isChecked():
+            self.reconfigure_camera_and_apply(is_initial_setup=True)
+
+    def reconfigure_camera_and_apply(self, is_initial_setup=False):
+        try:
+            shutter_speed = int(self.label_shutter_value.text())
+            analogue_gain = float(self.label_gain_value.text())
+            lens_position = float(self.label_focus_value.text())
+            awb_enabled = self.check_awb.isChecked()
+            auto_gain_enabled = self.check_auto_gain.isChecked()
+            ev_val = float(self.label_ev_value.text())
+            
+            self.current_focus_internal = int(lens_position * 100) 
+            
+            current_mode_key = "HIGH_QUALITY"
+            if self.radio_fhd.isChecked(): current_mode_key = "FHD_MODE"
+            elif self.radio_hd.isChecked(): current_mode_key = "HD_MODE"
+            elif self.radio_high_speed.isChecked(): current_mode_key = "HIGH_SPEED"
+            
+            mode_config = CAMERA_MODES[current_mode_key]
+
+            if is_initial_setup:
+                self.picam2.stop()
+                
+                preview_config = self.picam2.create_preview_configuration(
+                    main={"size": mode_config["resolution"]},
+                    controls={"FrameRate": mode_config["fps"]},
+                    queue=False, 
+                    buffer_count=4 
+                )
+                
+                self.picam2.configure(preview_config)
+            
+            controls = {
+                "LensPosition": lens_position,
+                "AfMode": 0,
+                "AwbEnable": awb_enabled
+            }
+            
+            if auto_gain_enabled:
+                controls["AeEnable"] = True
+                controls["ExposureValue"] = ev_val # Aplica o EV no preview
+            else:
+                controls["AeEnable"] = False
+                controls["ExposureTime"] = shutter_speed
+                controls["AnalogueGain"] = analogue_gain
+                # Em manual, EV é ignorado
+            
+            if not awb_enabled:
+                controls["ColourGains"] = (1.0, 1.0)
+                
+            self.picam2.set_controls(controls)
+            
+            if is_initial_setup:
+                self.picam2.start()
+            
+            if not is_initial_setup:
+                with open(SETTINGS_FILE, 'w') as f:
+                    f.write(f"MODE: {current_mode_key}\n")
+                    f.write(f"SHUTTER_SPEED: {shutter_speed}\n")
+                    f.write(f"ANALOGUE_GAIN: {analogue_gain}\n")
+                    f.write(f"LENS_POSITION: {lens_position}\n")
+                    f.write(f"AWB_ENABLE: {awb_enabled}\n")
+                    f.write(f"AUTO_GAIN: {auto_gain_enabled}\n")
+                    f.write(f"EXPOSURE_VALUE: {ev_val}\n") # Salva o EV
+                print(f"[LOG] Configurações salvas. EV: {ev_val}")
+
+        except Exception as e:
+            print(f"[ERRO] Erro ao aplicar configurações: {e}")
+            traceback.print_exc()
+
+    def closeEvent(self, event):
+        self.floating_overlay.close()
+        self.picam2.stop()
+        event.accept()
+
+if __name__ == "__main__":
+    import os
+    from PyQt5.QtGui import QSurfaceFormat
+
+    format = QSurfaceFormat()
+    format.setSwapInterval(1) 
+    QSurfaceFormat.setDefaultFormat(format)
+
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    
+    loaded_config = load_settings()
+    picam2 = Picamera2()
+
+    window = CameraControlWindow(picam2, loaded_config)
+    window.resize(950, 700)
+    window.show()
+    
+    sys.exit(app.exec())

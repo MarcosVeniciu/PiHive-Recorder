@@ -1,0 +1,38 @@
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode e cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Arquivos de dados de execução e telemetria (armazenados em ~/Desktop/Gravacoes_Colmeia/)
+*.csv
+*.json
+RELATORIO_EXECUCAO.md
+camera_settings.txt.bak
+
+# Arquivos de vídeo e contêineres
+videos/
+videos_colmeia/
+*.h264
+*.mkv
+*.mp4
+*.avi
+
+# Atalhos locais gerados pelo instalador
+Gravar.desktop
+Ajustar_camera.desktop
+*.desktop
+
+# IDEs e editores
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

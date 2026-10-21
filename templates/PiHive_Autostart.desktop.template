@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=PiHive Autostart
+Comment=Inicialização automática do gravador com contagem regressiva
+Exec=lxterminal --title="PiHive-Recorder - Autostart" -e bash "{{PROJECT_DIR}}/scripts/iniciar_gravacao.sh"
+Icon=camera-video
+Terminal=false
+Type=Application
+X-GNOME-Autostart-enabled=true
+Categories=Utility;

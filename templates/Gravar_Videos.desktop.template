@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Gravar Vídeos (PiHive)
+Comment=Inicia a gravação automática e telemetria da colmeia
+Exec=lxterminal --title="PiHive-Recorder - Gravação" -e bash "{{PROJECT_DIR}}/scripts/iniciar_gravacao.sh"
+Icon=camera-video
+Terminal=false
+Type=Application
+Categories=Application;Video;AudioVideo;

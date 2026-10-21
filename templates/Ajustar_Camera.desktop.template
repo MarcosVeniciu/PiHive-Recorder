@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Ajustar Câmera (PiHive)
+Comment=Abre a interface gráfica para ajuste de foco, ganho e exposição da câmera
+Exec=lxterminal --title="PiHive-Recorder - Calibração" -e bash "{{PROJECT_DIR}}/scripts/ajustar_camera.sh"
+Icon=camera-web
+Terminal=false
+Type=Application
+Categories=Application;Settings;Video;

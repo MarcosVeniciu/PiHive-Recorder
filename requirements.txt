@@ -1,0 +1,6 @@
+# Dependências Python para PiHive-Recorder
+# NOTA: No Raspberry Pi OS Bookworm, instale com 'python3 -m venv --system-site-packages'
+# para compartilhar pacotes de hardware do sistema (picamera2, PyQt5, smbus).
+
+psutil>=5.9.0
+PyQt5>=5.15.0
