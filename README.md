@@ -115,7 +115,7 @@ Dê duplo clique no atalho **`Ajustar Câmera (PiHive)`** na Área de Trabalho o
 ```
 * Ajuste o foco manual até obter a nitidez ideal na colmeia.
 * Configure o obturador (Shutter) para congelar o movimento das abelhas.
-* Clique em **"Aplicar e Salvar"**. As configurações serão gravadas no arquivo `camera_settings.txt` e lidas automaticamente pelo gravador.
+* Clique em **"Aplicar e Salvar"**. As configurações serão gravadas em `~/Desktop/Gravacoes_Colmeia/camera_settings.txt` (isoladas do Git) e lidas automaticamente pelo gravador.
 
 ### 2. Iniciar a Gravação Automática
 Dê duplo clique no atalho **`Gravar Vídeos (PiHive)`** na Área de Trabalho ou execute:
@@ -140,15 +140,16 @@ Os dados gerados pelo sistema são salvos na sua Área de Trabalho em `~/Desktop
 
 ```
 ~/Desktop/Gravacoes_Colmeia/
+├── camera_settings.txt                # Calibração ativa da câmera (foco, shutter, ganho, EV)
 ├── videos/
 │   └── 2026_10_21/
 │       └── h14/
 │           ├── 2026_10_21_h14_M05_S00.mkv
 │           └── 2026_10_21_h14_M06_S00.mkv
 ├── logs/
-│   ├── RELATORIO_EXECUCAO.md      # Tabela em Markdown de todos os blocos gravados
-│   ├── log_energia_intervalo.csv  # Telemetria periódica (CPU, Temp, Clock, Watts)
-│   └── estado_atual.json          # Status instantâneo em tempo real
+│   ├── RELATORIO_EXECUCAO.md          # Tabela em Markdown de todos os blocos gravados
+│   ├── log_energia_intervalo.csv      # Telemetria periódica (CPU, Temp, Clock, Watts)
+│   └── estado_atual.json              # Status instantâneo em tempo real
 └── sensores/
     └── monitor_temperatura_umidade.csv  # Leituras dos sensores ambientais
 ```

@@ -9,7 +9,7 @@ from pathlib import Path
 
 # --- DIRETÓRIOS E CAMINHOS DO PROJETO ---
 PROJECT_ROOT = Path(__file__).resolve().parent
-SETTINGS_FILE = PROJECT_ROOT / "camera_settings.txt"
+SETTINGS_TEMPLATE = PROJECT_ROOT / "templates" / "camera_settings.txt.example"
 
 # --- DIRETÓRIO DE ARMAZENAMENTO EXTERNO (ÁREA DE TRABALHO) ---
 # Salva vídeos, logs e dados fora da pasta do código para manter o repositório limpo
@@ -17,6 +17,9 @@ STORAGE_DIR = Path.home() / "Desktop" / "Gravacoes_Colmeia"
 VIDEOS_DIR = STORAGE_DIR / "videos"
 LOGS_DIR = STORAGE_DIR / "logs"
 SENSORS_DIR = STORAGE_DIR / "sensores"
+
+# Arquivo de calibração da câmera (específico deste dispositivo, isolado do Git)
+SETTINGS_FILE = STORAGE_DIR / "camera_settings.txt"
 
 # Arquivos de saída
 LOG_MARKDOWN = LOGS_DIR / "RELATORIO_EXECUCAO.md"
@@ -59,6 +62,13 @@ HARDWARE_INTERVAL_SEC = 5         # Telemetria do sistema a cada 5s
 
 
 def init_storage():
-    """Cria as pastas de armazenamento na Área de Trabalho se não existirem."""
+    """Cria as pastas de armazenamento na Área de Trabalho e copia modelo de calibração se necessário."""
     for folder in [STORAGE_DIR, VIDEOS_DIR, LOGS_DIR, SENSORS_DIR]:
         folder.mkdir(parents=True, exist_ok=True)
+
+    # Se ainda não existir arquivo de calibração na Área de Trabalho, inicializa com o modelo padrão
+    if not SETTINGS_FILE.exists() and SETTINGS_TEMPLATE.exists():
+        try:
+            shutil.copy2(SETTINGS_TEMPLATE, SETTINGS_FILE)
+        except Exception:
+            pass

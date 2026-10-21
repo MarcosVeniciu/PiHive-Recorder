@@ -14,7 +14,7 @@ __pycache__/
 # Arquivos de dados de execução e telemetria (armazenados em ~/Desktop/Gravacoes_Colmeia/)
 *.csv
 *.json
-RELATORIO_EXECUCAO.md
+camera_settings.txt
 camera_settings.txt.bak
 
 # Arquivos de vídeo e contêineres
