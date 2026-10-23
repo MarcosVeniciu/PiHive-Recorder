@@ -58,6 +58,7 @@ graph TD
 * ⚡ **Telemetria de Consumo e Hardware:** Estimativa contínua de consumo em Watts (perfis Min/Med/Max para Pi 5), temperatura do SoC, clock de CPU e alertas de throttling por aquecimento ou subtensão via `vcgencmd`.
 * 🔄 **Recuperação de Queda de Energia (Autostart Inteligente):** Inicialização automática no boot com contagem regressiva de 60 segundos com janela de cancelamento pelo teclado para permitir ajustes antes de iniciar a gravação.
 * 📁 **Separação Limpa de Dados:** Todos os vídeos, logs de execução e arquivos CSV são gravados automaticamente na pasta `~/Desktop/Gravacoes_Colmeia/`, mantendo o repositório Git limpo.
+* 📱 **Controle Headless via Smartphone (USB Tethering & VNC):** Opere o Raspberry Pi 5 em campo sem monitor físico, usando um smartphone Android como tela, mouse/teclado e roteador de internet (veja [`tethering/README.md`](tethering/README.md)).
 * 🧩 **Extensibilidade Modular:** Classes base abstratas (`BaseCamera` e `BaseSensor`) facilitam adicionar suporte a novas câmeras ou sensores.
 
 ---
@@ -163,6 +164,13 @@ Para verificar se ambos os sensores climáticos estão respondendo corretamente:
 ```bash
 python3 tools/teste_sensor.py
 ```
+
+### 4. 📱 Controle Headless em Campo (USB Tethering + VNC)
+Para operar o Raspberry Pi 5 no campo usando a tela do celular Android como monitor e teclado:
+```bash
+sudo ./tethering/setup_tethering.sh
+```
+📖 *Instruções passo a passo de conexão diária no [Guia de Tethering & VNC](tethering/README.md).*
 
 ---
 
