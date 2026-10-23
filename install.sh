@@ -36,7 +36,9 @@ sudo apt-get install -y \
     python3-pip \
     python3-picamera2 \
     python3-pyqt5 \
+    python3-pyqt5.sip \
     python3-smbus \
+    python3-smbus2 \
     python3-psutil \
     mkvtoolnix \
     i2c-tools \
@@ -51,10 +53,27 @@ if command -v raspi-config &>/dev/null; then
     sudo raspi-config nonint do_i2c 0 || true
 fi
 
-# 4. Criação do Ambiente Virtual Python
+# 4. Criação e Validação do Ambiente Virtual Python
 echo -e "${BLUE}[3/6] Configurando ambiente virtual Python (.venv)...${RESET}"
+
+# Se o .venv já existir, valida se está saudável com system-site-packages
+if [ -d "$PROJECT_DIR/.venv" ]; then
+    VENV_HEALTHY=true
+    if ! grep -q "include-system-site-packages = true" "$PROJECT_DIR/.venv/pyvenv.cfg" 2>/dev/null; then
+        VENV_HEALTHY=false
+    fi
+    if ! "$PROJECT_DIR/.venv/bin/python3" -c "import picamera2, psutil, smbus2; from PyQt5 import QtCore" &>/dev/null; then
+        VENV_HEALTHY=false
+    fi
+
+    if [ "$VENV_HEALTHY" = false ]; then
+        echo -e "${YELLOW}Ambiente virtual existente (.venv) corrompido ou sem pacotes do sistema. Recriando...${RESET}"
+        rm -rf "$PROJECT_DIR/.venv"
+    fi
+fi
+
 if [ ! -d "$PROJECT_DIR/.venv" ]; then
-    # Usamos --system-site-packages para ter acesso ao picamera2 e PyQt5 otimizados para o Pi
+    # Usamos --system-site-packages para ter acesso ao picamera2, PyQt5, smbus e psutil do sistema
     python3 -m venv --system-site-packages "$PROJECT_DIR/.venv"
     echo -e "${GREEN}Ambiente virtual criado com sucesso.${RESET}"
 fi
@@ -62,6 +81,17 @@ fi
 source "$PROJECT_DIR/.venv/bin/activate"
 pip install --upgrade pip
 pip install -r "$PROJECT_DIR/requirements.txt"
+
+# Validação das dependências essenciais
+echo -e "${BLUE}Validando integridade dos pacotes no ambiente virtual...${RESET}"
+"$PROJECT_DIR/.venv/bin/python3" -c "
+from PyQt5.QtCore import PYQT_VERSION_STR
+import picamera2, psutil, smbus2
+print(f'  ✓ PyQt5: {PYQT_VERSION_STR}')
+print(f'  ✓ psutil: {psutil.__version__}')
+print(f'  ✓ smbus2: {getattr(smbus2, \"__version__\", \"carregado\")}')
+print(f'  ✓ picamera2: {getattr(picamera2, \"__version__\", \"carregado\")}')
+"
 
 # 5. Permissões de execução nos scripts
 echo -e "${BLUE}[4/6] Concedendo permissões de execução aos scripts...${RESET}"
@@ -118,7 +148,7 @@ else
 fi
 
 # Criação inicial da pasta de armazenamento externa
-python3 -c "import config; config.init_storage()"
+"$PROJECT_DIR/.venv/bin/python3" -c "import config; config.init_storage()"
 
 echo ""
 echo -e "${GREEN}==================================================================${RESET}"

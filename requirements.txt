@@ -1,20 +1,24 @@
 # ==============================================================================
 # PiHive-Recorder - Dependências Python
 # ==============================================================================
-# Ambiente Homologado e Testado:
-#   • Sistema Operacional: Raspberry Pi OS 64-bit / Debian GNU/Linux 12 (Bookworm)
+# Ambientes Homologados:
+#   • Sistema Operacional: Raspberry Pi OS 64-bit (Debian 12 Bookworm / Debian 13 Trixie)
 #   • Arquitetura: aarch64 (ARM 64-bit - Raspberry Pi 5)
-#   • Kernel: Linux 6.12.75+rpt-rpi-2712
-#   • Versão do Python: Python 3.11.2
+#   • Versões do Python suportadas: Python 3.11 a 3.13+
 #
 # IMPORTANTE:
-# No Raspberry Pi OS Bookworm (PEP 668), crie o venv com:
+# No Raspberry Pi OS (PEP 668), o ambiente virtual deve ser criado com:
 #   python3 -m venv --system-site-packages .venv
-# Isso permite que bibliotecas com drivers de hardware compilados pelo sistema
-# (como python3-picamera2 v0.3.31 e python3-smbus) sejam herdadas pelo ambiente.
+# Isso permite que bibliotecas do sistema compiladas para ARM64
+# (como picamera2, PyQt5, smbus2 e psutil) sejam reaproveitadas diretamente
+# a partir do Debian/Raspberry Pi OS via apt.
+#
+# O uso de versões mínimas flexíveis (>=) é essencial para permitir que o pip
+# reconheça os pacotes do sistema como já satisfeitos, evitando compilações
+# a partir do código-fonte (que falham pela ausência de qmake/ferramentas de build).
 # ==============================================================================
 
-# Pacotes Pip com versões travadas (testadas e validadas)
+# Pacotes Python com versões mínimas homologadas
 psutil>=5.9.4
 PyQt5>=5.15.9
 PyQt5-sip>=12.11.1
