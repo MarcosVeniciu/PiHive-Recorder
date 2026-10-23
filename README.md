@@ -52,19 +52,13 @@ graph TD
 ## ✨ Principais Funcionalidades
 
 * 📹 **Gravação Automática Segmentada:** Fatiamento de vídeos (padrão 60s) diretamente em H.264 acelerado por hardware e empacotado para MKV via `mkvmerge` preservando taxa de quadros real.
-* 🎛️ **Interface Gráfica de Calibração (GUI):** Preview em tempo real com overlay de centralização para ajuste fino de:
-  * Posição da lente / Foco manual
-  * Velocidade de obturador (Shutter speed em µs)
-  * Ganho analógico e Prioridade de Shutter (Auto Gain)
-  * Compensação de exposição (EV)
-  * Balanço de branco automático (AWB)
-  * Modos de resolução (Alta Qualidade 2304x1296@56fps, FHD, HD 1280x720@120fps, High Speed)
+* 🎛️ **Interface Gráfica de Calibração (GUI):** Preview em tempo real com overlay flutuante para ajuste fino de foco macro, velocidade de obturador, ganho, EV e recorte ROI (veja [`gui/README.md`](gui/README.md)).
+* 🎯 **Recorte por Hardware (Hardware ROI 736x736 @ 120 FPS):** O ISP de hardware recorta a região de interesse diretamente do fluxo bruto do sensor sem interpolação e com zero uso de CPU (veja [`cameras/README.md`](cameras/README.md)).
 * 🌡️ **Monitoramento Climático Multissensor:** Suporte nativo a múltiplos sensores Sensirion SHT20 em barramentos I2C simultâneos (I2C-1 por hardware e I2C-3 por software GPIO).
 * ⚡ **Telemetria de Consumo e Hardware:** Estimativa contínua de consumo em Watts (perfis Min/Med/Max para Pi 5), temperatura do SoC, clock de CPU e alertas de throttling por aquecimento ou subtensão via `vcgencmd`.
 * 🔄 **Recuperação de Queda de Energia (Autostart Inteligente):** Inicialização automática no boot com contagem regressiva de 60 segundos com janela de cancelamento pelo teclado para permitir ajustes antes de iniciar a gravação.
-* 🎯 **Recorte por Hardware (Hardware ROI 736x736 @ 120 FPS):** O ISP de hardware recorta a região de interesse diretamente do fluxo bruto do sensor sem interpolação, sem atraso de scripts e com zero uso adicional de CPU, preservando a densidade total de pixels nativos.
 * 📁 **Separação Limpa de Dados:** Todos os vídeos, logs de execução e arquivos CSV são gravados automaticamente na pasta `~/Desktop/Gravacoes_Colmeia/`, mantendo o repositório Git limpo.
-* 🧩 **Extensibilidade Modular:** Classes base abstratas (`BaseCamera` e `BaseSensor`) facilitam adicionar suporte a novas câmeras (HQ Camera IMX477, USB V4L2) ou sensores (BME280, DHT22, DS18B20).
+* 🧩 **Extensibilidade Modular:** Classes base abstratas (`BaseCamera` e `BaseSensor`) facilitam adicionar suporte a novas câmeras ou sensores.
 
 ---
 
@@ -86,28 +80,19 @@ Este projeto foi desenvolvido e exaustivamente validado nas seguintes especifica
 > Se você estiver utilizando uma versão mais recente do Python (ex: Python 3.12+) ou uma nova versão do Raspberry Pi OS, atente-se às políticas do PEP 668. O instalador automatizado [`install.sh`](install.sh) utiliza `--system-site-packages` para manter a compatibilidade com os drivers binários da placa.
 ---
 
-## 📷 Módulo de Câmeras & Armazenamento
+## 📷 Câmeras & Armazenamento em Campo
 
-O sistema adota uma arquitetura modular baseada no padrão *Factory* ([`cameras/factory.py`](cameras/factory.py)), permitindo conectar diferentes modelos de câmeras implementando a interface abstrata [`BaseCamera`](cameras/base_camera.py).
-
-O driver homologado padrão é o **Sony IMX708** ([`cameras/imx708.py`](cameras/imx708.py) - Raspberry Pi Camera Module 3), configurado para captura de alta velocidade (**1536x864 @ 120 FPS**) com recorte direto pelo processador de imagem (**Hardware ROI 736x736**):
-
-| Chave do Modo | Resolução | FPS Máx | Aplicação Principal |
-|:---|:---:|:---:|:---|
-| `HIGH_SPEED` *(Padrão)* | **1536 x 864** | ~120 fps | Rastreamento de voo veloz e identificação de pólen (ROI 736x736) |
-| `HIGH_QUALITY` | **2304 x 1296** | ~56 fps | Campo de visão total (Full FOV) com binning 2x2 e alta sensibilidade |
-| `FULL_RES` | **4608 x 2592** | ~14 fps | Resolução máxima nativa (11.9 MP) para estáticas e time-lapses |
-| `HDR_MODE` | **2304 x 1296** | ~30 fps | HDR multi-exposição por sensor para cenas de alto contraste solar |
+O sistema gerencia os dispositivos de captura através do padrão *Factory* ([`cameras/factory.py`](cameras/factory.py)), sendo homologado nativamente para o sensor **Sony IMX708 (Camera Module 3)** operando em alta velocidade (**1536x864 @ 120 FPS** com **Hardware ROI 736x736**).
 
 > [!TIP]
-> **Documentação Completa do Módulo:**
-> Para conferir todos os modos, detalhes da compressão para microalvos e o **guia passo a passo de como adicionar novas câmeras**, consulte o arquivo [`cameras/README.md`](cameras/README.md).
+> **Documentação Completa da Câmera:**
+> Para conferir as especificações de todos os modos nativos, as técnicas de compressão H.264 para microalvos de pólen e o **tutorial passo a passo de como adicionar novas câmeras**, consulte o arquivo [`cameras/README.md`](cameras/README.md).
 
 ### 💾 Estimativa de Armazenamento e Autonomia em Campo
 
 Com a gravação contínua calibrada a **8 Mbps (736x736 @ 120 FPS)** e fatiamento em blocos de 60 segundos (~60 MB/bloco):
 
-| Mídia de Armazenamento | Espaço Útil para Vídeos (Descontando SO e Margem) | Autonomia Contínua | Autonomia em Dias de Campo (15h/dia) |
+| Mídia de Armazenamento | Espaço Útil para Vídeos (Descontando SO e Margem 5GB) | Autonomia Contínua | Autonomia em Dias de Campo (15h/dia) |
 |:---|:---:|:---:|:---:|
 | **Cartão 128 GB** (microSD / SSD) | **~100 GB livres** | **~27 a 28 horas** | **quase 2 dias completos** (~1,8 dia) |
 | **Cartão 256 GB** (microSD / SSD) | **~217 GB livres** | **~59 a 60 horas** | **4 dias completos de coleta** |
@@ -160,11 +145,9 @@ Dê duplo clique no atalho **`Ajustar Câmera (PiHive)`** na Área de Trabalho o
 ```bash
 ./scripts/ajustar_camera.sh
 ```
-* Ajuste o foco manual até obter a nitidez ideal na colmeia.
-* Configure o obturador (Shutter) para congelar o movimento das abelhas.
-* Ajuste o enquadramento ROI (736x736) e a compensação EV.
-* Clique em **"Aplicar e Salvar"**. As configurações serão gravadas em `~/Desktop/Gravacoes_Colmeia/camera_settings.txt` (isoladas do Git) e lidas automaticamente pelo gravador.
-* *(Para um guia completo de todos os botões e recursos visuais, consulte a [Documentação Detalhada da GUI](gui/README.md)).*
+Ajuste foco manual, velocidade de obturador, ganho/EV e enquadramento ROI (736x736) com preview ao vivo. Clique em **"Aplicar e Salvar"** para persistir as alterações em `~/Desktop/Gravacoes_Colmeia/camera_settings.txt`.
+
+> 📖 **Guia Completo da Interface:** Para uma explicação visual detalhada de todos os controles e guias de enquadramento, consulte a [Documentação da GUI](gui/README.md).
 
 ### 2. 📹 Iniciar a Gravação Automática
 Dê duplo clique no atalho **`Gravar Vídeos (PiHive)`** na Área de Trabalho ou execute:
@@ -207,7 +190,7 @@ Os dados gerados pelo sistema são salvos na sua Área de Trabalho em `~/Desktop
 
 ## ⚙️ Configurações Customizáveis (`config.py`)
 
-No arquivo [`config.py`](file:///home/pi5/Desktop/gravacao_raspberry/config.py), você pode personalizar:
+No arquivo [`config.py`](config.py), você pode personalizar:
 
 ```python
 VIDEO_DURATION_SEC = 60          # Duração de cada bloco de vídeo (segundos)
@@ -220,16 +203,14 @@ CAMERA_DRIVER = "imx708"         # Driver da câmera ativa
 
 ---
 
-## 🧩 Como Adicionar Novas Câmeras ou Sensores
+## 🧩 Extensibilidade de Hardware
 
 ### 📷 Adicionar uma Nova Câmera
-1. Crie um novo arquivo em `cameras/` (ex: `cameras/imx477.py`) herdando de `BaseCamera` ([`cameras/base_camera.py`](file:///home/pi5/Desktop/gravacao_raspberry/cameras/base_camera.py)).
-2. Implemente os métodos `build_record_command` e `load_settings`.
-3. Registre no arquivo [`cameras/factory.py`](file:///home/pi5/Desktop/gravacao_raspberry/cameras/factory.py) e defina `CAMERA_DRIVER` no `config.py`.
+O módulo de câmeras adota o padrão *Factory* para suportar facilmente outros sensores (IMX477 HQ Camera, IMX219, USB V4L2). Para o tutorial completo com exemplos de código, consulte o [Guia de Adição de Câmeras](cameras/README.md#️-como-adicionar-uma-nova-câmera).
 
 ### 🌡️ Adicionar um Novo Sensor
-1. Crie um novo driver em `sensors/` (ex: `sensors/bme280.py`) herdando de `BaseSensor` ([`sensors/base_sensor.py`](file:///home/pi5/Desktop/gravacao_raspberry/sensors/base_sensor.py)).
-2. Adicione os parâmetros do novo sensor na lista `ACTIVE_SENSORS` em [`config.py`](file:///home/pi5/Desktop/gravacao_raspberry/config.py). O gerenciador cuidará das threads e da escrita das colunas no CSV automaticamente.
+1. Crie um novo driver em `sensors/` (ex: `sensors/bme280.py`) herdando de `BaseSensor` ([`sensors/base_sensor.py`](sensors/base_sensor.py)).
+2. Adicione os parâmetros do novo sensor na lista `ACTIVE_SENSORS` em [`config.py`](config.py). O gerenciador cuidará das threads e da escrita das colunas no CSV automaticamente.
 
 ---
 
