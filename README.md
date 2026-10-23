@@ -83,51 +83,34 @@ Este projeto foi desenvolvido e exaustivamente validado nas seguintes especifica
 | **Utilitários do Sistema** | `mkvtoolnix` v74.0.0, `i2c-tools` | Empacotamento MKV e barramento I2C |
 
 > [!NOTE]
-> Se você estiver utilizando uma versão mais recente do Python (ex: Python 3.12+) ou uma nova versão do Raspberry Pi OS, atente-se às políticas do PEP 668. O instalador automatizado [`install.sh`](file:///home/pi5/Desktop/gravacao_raspberry/install.sh) utiliza `--system-site-packages` para manter a compatibilidade com os drivers binários da placa.
+> Se você estiver utilizando uma versão mais recente do Python (ex: Python 3.12+) ou uma nova versão do Raspberry Pi OS, atente-se às políticas do PEP 668. O instalador automatizado [`install.sh`](install.sh) utiliza `--system-site-packages` para manter a compatibilidade com os drivers binários da placa.
 ---
 
-## 📷 Modos Oficiais da Câmera (Sony IMX708 / Camera Module 3)
+## 📷 Módulo de Câmeras & Armazenamento
 
-O driver [`cameras/imx708.py`](file:///home/pi5/Desktop/gravacao_raspberry/cameras/imx708.py) implementa os modos nativos do sensor Sony IMX708 e perfis de vídeo otimizados:
+O sistema adota uma arquitetura modular baseada no padrão *Factory* ([`cameras/factory.py`](cameras/factory.py)), permitindo conectar diferentes modelos de câmeras implementando a interface abstrata [`BaseCamera`](cameras/base_camera.py).
 
-| Chave do Modo | Resolução | FPS Máx | Modo Sensor | Descrição e Aplicação |
-|:---|:---:|:---:|:---:|:---|
-| `FULL_RES` | **4608 x 2592** | ~14 fps | Nativo 0 (Crop Total) | 11.9 MP sem binning. Máxima riqueza de detalhes para fotos e time-lapses. |
-| `HIGH_QUALITY` | **2304 x 1296** | ~56 fps | Nativo 1 (2x2 Binning) | Modo padrão Full FOV (campo total). Maior sensibilidade luminosa e nitidez. |
-| `FHD_MODE` | **1920 x 1080** | ~56 fps | Escalado ISP (Modo 1) | Padrão Full HD 16:9 compatível com a maioria dos reprodutores de vídeo. |
-| `HIGH_SPEED` | **1536 x 864** | ~120 fps | Nativo 2 (2x Crop) | Alta velocidade nativa do sensor para rastrear o voo veloz de abelhas. |
-| `HD_MODE` | **1280 x 720** | ~120 fps | Escalado ISP (Modo 2) | HD a 120 FPS. Excelente relação fluidez vs tamanho de arquivo. |
-| `HDR_MODE` | **2304 x 1296** | ~30 fps | Nativo 1 (HDR Sensor) | Alto Alcance Dinâmico por hardware no sensor IMX708 para sol direto. |
+O driver homologado padrão é o **Sony IMX708** ([`cameras/imx708.py`](cameras/imx708.py) - Raspberry Pi Camera Module 3), configurado para captura de alta velocidade (**1536x864 @ 120 FPS**) com recorte direto pelo processador de imagem (**Hardware ROI 736x736**):
 
-### 🎯 Recorte por Hardware (ROI 736x736 @ 120 FPS) e Otimização para Microalvos
-
-Para capturar o voo e detectar **cargas corbiculares de pólen (alvos diminutos de 10 a 25 pixels)**, o sistema utiliza uma combinação otimizada de hardware e compressão:
-
-1. **Hardware ROI (`--roi`)**: O processador de sinal de imagem (PiSP) da Raspberry Pi 5 fatia o fluxo bruto do Modo 2 nativo (1536x864) diretamente para **736x736 a 120 FPS** sem interpolação, preservando a máxima densidade ótica sem atraso de processamento na CPU.
-2. **Taxa de Bits Calibrada (`8 Mbps`)**: Evita o descarte de altas frequências espaciais e contornos finos das patas da abelha, reduzindo o tamanho dos arquivos em mais de **50%** em relação ao padrão sem perda visual.
-3. **H.264 High Profile (`--profile high --level 4.2`)**: Ativa a transformada adaptativa 8x8 DCT e compressão aritmética CABAC, garantindo maior fidelidade de texturas e bordas.
-4. **Intervalo Intra (`--intra 60`)**: Injeta um I-frame limpo a cada 0,5s, garantindo que em qualquer aproximação da abelha haverá múltiplos quadros perfeitos para anotação e segmentação de pólen.
-5. **Cabeçalhos Inline (`--inline`)**: Força SPS/PPS antes de cada I-frame, permitindo fatiar e processar qualquer trecho do vídeo de forma independente no OpenCV.
-
-#### 💾 Estimativa de Armazenamento e Consumo em Campo
-
-A partir dos testes em bancada a **8 Mbps (736x736 @ 120 FPS)**, temos o seguinte perfil de geração de dados:
-
-| Janela de Tempo | Quantidade de Vídeos | Tamanho Estimado | Observações |
+| Chave do Modo | Resolução | FPS Máx | Aplicação Principal |
 |:---|:---:|:---:|:---|
-| **1 Bloco (60 segundos)** | 1 arquivo | **~60 MB** | Fatiamento contínuo em contêiner `.mkv` |
-| **1 Hora de Gravação** | 60 arquivos | **~3,6 GB** | Fluxo estável sem picos de CPU |
-| **1 Dia de Coleta (15 horas)** | 900 arquivos | **~54,5 GB** | Janela padrão das **04:00 às 19:00** |
+| `HIGH_SPEED` *(Padrão)* | **1536 x 864** | ~120 fps | Rastreamento de voo veloz e identificação de pólen (ROI 736x736) |
+| `HIGH_QUALITY` | **2304 x 1296** | ~56 fps | Campo de visão total (Full FOV) com binning 2x2 e alta sensibilidade |
+| `FULL_RES` | **4608 x 2592** | ~14 fps | Resolução máxima nativa (11.9 MP) para estáticas e time-lapses |
+| `HDR_MODE` | **2304 x 1296** | ~30 fps | HDR multi-exposição por sensor para cenas de alto contraste solar |
 
-##### ⏳ Autonomia Real de Gravação (Descontando SO e Margem de Segurança)
+> [!TIP]
+> **Documentação Completa do Módulo:**
+> Para conferir todos os modos, detalhes da compressão para microalvos e o **guia passo a passo de como adicionar novas câmeras**, consulte o arquivo [`cameras/README.md`](cameras/README.md).
 
-> [!IMPORTANT]
-> **Cálculo da capacidade real:** Discos e cartões de memória possuem capacidade formatada útil inferior ao valor nominal. Além disso, o sistema operacional (Raspberry Pi OS 64-bit + pacotes + swap) consome cerca de **12 a 14 GB**, e o `PiHive-Recorder` possui parada automática preventiva configurada para **5.0 GB livres** (`LIMITE_ESPACO_LIVRE_GB` em `config.py`).
+### 💾 Estimativa de Armazenamento e Autonomia em Campo
 
-| Mídia de Armazenamento | Espaço Bruto Formatado | Desconto (SO + Margem 5GB) | Espaço Útil para Vídeos | Autonomia em Horas Contínuas | Autonomia em Dias de Campo (15h/dia) |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| **Cartão 128 GB** (microSD / SSD) | ~119 GB | ~19 GB | **~100 GB livres** | **~27 a 28 horas** | **quase 2 dias completos** (~1,8 dia) |
-| **Cartão 256 GB** (microSD / SSD) | ~238 GB | ~21 GB | **~217 GB livres** | **~59 a 60 horas** | **4 dias completos de coleta** |
+Com a gravação contínua calibrada a **8 Mbps (736x736 @ 120 FPS)** e fatiamento em blocos de 60 segundos (~60 MB/bloco):
+
+| Mídia de Armazenamento | Espaço Útil para Vídeos (Descontando SO e Margem) | Autonomia Contínua | Autonomia em Dias de Campo (15h/dia) |
+|:---|:---:|:---:|:---:|
+| **Cartão 128 GB** (microSD / SSD) | **~100 GB livres** | **~27 a 28 horas** | **quase 2 dias completos** (~1,8 dia) |
+| **Cartão 256 GB** (microSD / SSD) | **~217 GB livres** | **~59 a 60 horas** | **4 dias completos de coleta** |
 
 ---
 
@@ -179,7 +162,9 @@ Dê duplo clique no atalho **`Ajustar Câmera (PiHive)`** na Área de Trabalho o
 ```
 * Ajuste o foco manual até obter a nitidez ideal na colmeia.
 * Configure o obturador (Shutter) para congelar o movimento das abelhas.
+* Ajuste o enquadramento ROI (736x736) e a compensação EV.
 * Clique em **"Aplicar e Salvar"**. As configurações serão gravadas em `~/Desktop/Gravacoes_Colmeia/camera_settings.txt` (isoladas do Git) e lidas automaticamente pelo gravador.
+* *(Para um guia completo de todos os botões e recursos visuais, consulte a [Documentação Detalhada da GUI](gui/README.md)).*
 
 ### 2. 📹 Iniciar a Gravação Automática
 Dê duplo clique no atalho **`Gravar Vídeos (PiHive)`** na Área de Trabalho ou execute:

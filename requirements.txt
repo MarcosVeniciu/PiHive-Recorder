@@ -15,7 +15,7 @@
 # ==============================================================================
 
 # Pacotes Pip com versões travadas (testadas e validadas)
-psutil==5.9.4
-PyQt5==5.15.9
-PyQt5-sip==12.11.1
-smbus2==0.4.2
+psutil>=5.9.4
+PyQt5>=5.15.9
+PyQt5-sip>=12.11.1
+smbus2>=0.4.2

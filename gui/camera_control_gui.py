@@ -653,6 +653,25 @@ class CameraControlWindow(QWidget):
     def toggle_gain_controls(self):
         is_auto = self.check_auto_gain.isChecked()
         self.gain_widget.setEnabled(not is_auto)
+        if hasattr(self, 'picam2') and self.picam2 and hasattr(self, 'label_shutter_value'):
+            try:
+                shutter_speed = int(self.label_shutter_value.text())
+                if is_auto:
+                    ev_val = float(self.label_ev_value.text())
+                    self.picam2.set_controls({
+                        "AeEnable": True,
+                        "ExposureTime": shutter_speed,
+                        "ExposureValue": ev_val
+                    })
+                else:
+                    gain = float(self.label_gain_value.text())
+                    self.picam2.set_controls({
+                        "AeEnable": False,
+                        "ExposureTime": shutter_speed,
+                        "AnalogueGain": gain
+                    })
+            except (ValueError, AttributeError):
+                pass
         
     def adjust_shutter(self, delta):
         try:
@@ -682,9 +701,14 @@ class CameraControlWindow(QWidget):
             if new_value < -10.0: new_value = -10.0
             
             self.label_ev_value.setText(f"{new_value:.1f}")
-            # Aplica no preview se estiver em auto gain
+            # Aplica no preview se estiver em auto gain mantendo o shutter fixo
             if self.check_auto_gain.isChecked():
-                self.picam2.set_controls({"ExposureValue": new_value})
+                shutter_speed = int(self.label_shutter_value.text())
+                self.picam2.set_controls({
+                    "AeEnable": True,
+                    "ExposureTime": shutter_speed,
+                    "ExposureValue": new_value
+                })
         except ValueError:
             pass
 
@@ -743,15 +767,15 @@ class CameraControlWindow(QWidget):
             controls = {
                 "LensPosition": lens_position,
                 "AfMode": 0,
-                "AwbEnable": awb_enabled
+                "AwbEnable": awb_enabled,
+                "ExposureTime": shutter_speed
             }
             
             if auto_gain_enabled:
                 controls["AeEnable"] = True
-                controls["ExposureValue"] = ev_val # Aplica o EV no preview
+                controls["ExposureValue"] = ev_val # Aplica o EV no preview respeitando o shutter fixo
             else:
                 controls["AeEnable"] = False
-                controls["ExposureTime"] = shutter_speed
                 controls["AnalogueGain"] = analogue_gain
                 # Em manual, EV é ignorado
             
