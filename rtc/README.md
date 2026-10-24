@@ -38,6 +38,26 @@ sudo ./setup_rtc.sh
    * Ativa a sincronização via internet (`timedatectl set-ntp true`).
    * Aplica o fuso horário lido do `config.py` (`timedatectl set-timezone`).
    * Grava a hora atual no chip RTC (`hwclock -w`) e exibe a leitura direta do hardware (`hwclock -r`).
+6. **Diagnóstico de Tensão e Segurança no Resumo Final:** Exibe a **tensão atual da bateria** (com referência nominal de `3.00 V` para CR2032) e a **tensão de carregamento** (`0.00 V`), confirmando que o recarregamento está desativado por segurança.
+
+---
+
+## 🔋 Verificação de Carga e Tabela de Referência (CR2032 - 3V)
+
+A Raspberry Pi 5 possui leitura integrada de tensão para monitorar a saúde da bateria do RTC e o status do circuito de carregamento.
+
+### Tabela de Referência de Tensão para Bateria CR2032 (Nominal 3.0V)
+
+| Faixa de Tensão | Estado da Carga | Observação / Ação Recomendada |
+| :---: | :--- | :--- |
+| **3.00 V a 3.30 V** | 🟢 **Carga Máxima (100%)** | Bateria nova / excelente estado. |
+| **2.70 V a 2.99 V** | 🟢 **Carga Boa** | Operação normal em campo. |
+| **2.50 V a 2.69 V** | 🟡 **Carga Baixa** | Recomendado planejar a substituição preventiva da bateria. |
+| **Abaixo de 2.30 V** | 🔴 **Carga Crítica** | Risco de perder a data/hora quando a Raspberry Pi for desligada. Substitua imediatamente. |
+
+> [!IMPORTANT]
+> **Segurança do Carregador (`charging_voltage`):**
+> Para baterias não recarregáveis como a **CR2032**, a tensão de carregamento (`charging_voltage`) deve estar sempre em **`0.00 V` (`0 µV`)**, confirmando que o carregamento foi desativado com sucesso.
 
 ---
 
@@ -70,4 +90,9 @@ Se você levar o equipamento para outra região e quiser mudar o fuso horário:
 * **Salvar manualmente a hora atual do sistema no RTC:**
   ```bash
   sudo hwclock -w
+  ```
+* **Verificar manualmente a tensão da bateria e do carregador (em Volts):**
+  ```bash
+  awk '{printf "Bateria RTC: %.2f V (Nominal CR2032: 3.00 V)\n", $1/1000000}' /sys/class/rtc/rtc0/battery_voltage
+  awk '{printf "Carregador : %.2f V\n", $1/1000000}' /sys/class/rtc/rtc0/charging_voltage
   ```

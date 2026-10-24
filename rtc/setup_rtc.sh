@@ -151,6 +151,30 @@ echo -e "${GREEN}✔ Configuração de RTC e Fuso Horário concluída!${NC}"
 echo -e "${BLUE}==================================================================${NC}"
 echo -e "Resumo do sistema (timedatectl):"
 timedatectl status | sed 's/^/  /'
+
+# Leitura da tensão da bateria e status do carregador (Raspberry Pi 5)
+BAT_VOLT_FILE="/sys/class/rtc/rtc0/battery_voltage"
+CHG_VOLT_FILE="/sys/class/rtc/rtc0/charging_voltage"
+
+if [ -f "$BAT_VOLT_FILE" ] || [ -f "$CHG_VOLT_FILE" ]; then
+    echo -e "\n${BLUE}------------------------------------------------------------------${NC}"
+    echo -e "🔋 ${YELLOW}Status de Energia e Segurança da Bateria RTC:${NC}"
+    if [ -f "$BAT_VOLT_FILE" ]; then
+        BAT_UV=$(cat "$BAT_VOLT_FILE" 2>/dev/null || echo "0")
+        BAT_V=$(awk -v uv="$BAT_UV" 'BEGIN {printf "%.2f", uv / 1000000}')
+        echo -e "  • Tensão atual da bateria : ${GREEN}${BAT_V} V${NC} (${BAT_UV} µV)"
+        echo -e "    (Referência: para bateria CR2032 a tensão nominal é 3.00 V)"
+    fi
+    if [ -f "$CHG_VOLT_FILE" ]; then
+        CHG_UV=$(cat "$CHG_VOLT_FILE" 2>/dev/null || echo "0")
+        CHG_V=$(awk -v uv="$CHG_UV" 'BEGIN {printf "%.2f", uv / 1000000}')
+        if [ "$CHG_UV" -eq 0 ] 2>/dev/null; then
+            echo -e "  • Tensão de carregamento  : ${GREEN}${CHG_V} V${NC} (${CHG_UV} µV) — ${GREEN}Recarregamento DESATIVADO (Seguro para CR2032)${NC}"
+        else
+            echo -e "  • Tensão de carregamento  : ${RED}${CHG_V} V${NC} (${CHG_UV} µV) — ${RED}ATENÇÃO: Carregador ativo! Reinicie a placa se usa CR2032.${NC}"
+        fi
+    fi
+fi
 echo -e "${BLUE}==================================================================${NC}"
 
 if [ "$NEEDS_REBOOT" = true ]; then
