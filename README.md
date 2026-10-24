@@ -175,6 +175,13 @@ sudo reboot
 * **Dica de Conexão no Celular:** Desative temporariamente o Wi-Fi e 4G/5G do smartphone para forçar a rota de multicast mDNS diretamente pelo cabo USB.
 📖 *Instruções passo a passo completas e comandos de validação no [Guia de Tethering & VNC](tethering/README.md) e no [Guia Ilustrado com Telas](doc/raspberry_pi_5_usb_tethering.md).*
 
+### 5. 🕒 Bateria RTC (Relógio de Tempo Real) e Fuso Horário
+Para manter a hora da Raspberry Pi atualizada em campo mesmo desligada (usando bateria não recarregável como a **CR2032**) ou atualizar o fuso horário configurado em [`config.py`](config.py):
+```bash
+sudo ./rtc/setup_rtc.sh
+```
+* Desativa o carregamento da bateria (`dtoverlay=rp1-rtc-charger,stop_charge`), aplica o fuso horário `TIMEZONE` do [`config.py`](config.py) e grava a hora no hardware (`hwclock`). Veja mais em [`rtc/README.md`](rtc/README.md).
+
 ---
 
 ## 📁 Estrutura de Arquivos de Dados
@@ -204,6 +211,7 @@ Os dados gerados pelo sistema são salvos na sua Área de Trabalho em `~/Desktop
 No arquivo [`config.py`](config.py), você pode personalizar:
 
 ```python
+TIMEZONE = "America/Sao_Paulo"   # Fuso horário do sistema e do RTC
 VIDEO_DURATION_SEC = 60          # Duração de cada bloco de vídeo (segundos)
 HORA_INICIO_GRAVACAO = 4         # Início do ciclo diário de gravação (04:00)
 HORA_TERMINO_GRAVACAO = 19       # Término do ciclo diário de gravação (19:00)

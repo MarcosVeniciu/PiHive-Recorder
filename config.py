@@ -27,7 +27,8 @@ STATUS_FILE = LOGS_DIR / "estado_atual.json"
 ENERGY_CSV = LOGS_DIR / "log_energia_intervalo.csv"
 SENSORS_CSV = SENSORS_DIR / "monitor_temperatura_umidade.csv"
 
-# --- PARÂMETROS DE GRAVAÇÃO ---
+# --- PARÂMETROS DE GRAVAÇÃO E FUSO HORÁRIO ---
+TIMEZONE = "America/Sao_Paulo"   # Fuso horário do sistema e do RTC
 VIDEO_DURATION_SEC = 60          # Duração de cada bloco de vídeo em segundos
 HORA_INICIO_GRAVACAO = 4         # Início da gravação diária (04:00)
 HORA_TERMINO_GRAVACAO = 19       # Término da gravação diária (19:00)

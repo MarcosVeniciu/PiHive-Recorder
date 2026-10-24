@@ -96,6 +96,8 @@ print(f'  ✓ picamera2: {getattr(picamera2, \"__version__\", \"carregado\")}')
 # 5. Permissões de execução nos scripts
 echo -e "${BLUE}[4/6] Concedendo permissões de execução aos scripts...${RESET}"
 chmod +x "$PROJECT_DIR/scripts/"*.sh
+[ -f "$PROJECT_DIR/rtc/setup_rtc.sh" ] && chmod +x "$PROJECT_DIR/rtc/setup_rtc.sh"
+[ -f "$PROJECT_DIR/tethering/setup_tethering.sh" ] && chmod +x "$PROJECT_DIR/tethering/setup_tethering.sh"
 chmod +x "$PROJECT_DIR/install.sh"
 [ -f "$PROJECT_DIR/tools/teste_sensor.py" ] && chmod +x "$PROJECT_DIR/tools/teste_sensor.py"
 
