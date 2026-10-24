@@ -56,7 +56,7 @@ graph TD
 * 🎯 **Recorte por Hardware (Hardware ROI 736x736 @ 120 FPS):** O ISP de hardware recorta a região de interesse diretamente do fluxo bruto do sensor sem interpolação e com zero uso de CPU (veja [`cameras/README.md`](cameras/README.md)).
 * 🌡️ **Monitoramento Climático Multissensor:** Suporte nativo a múltiplos sensores Sensirion SHT20 em barramentos I2C simultâneos (I2C-1 por hardware e I2C-3 por software GPIO).
 * ⚡ **Telemetria de Consumo e Hardware:** Estimativa contínua de consumo em Watts (perfis Min/Med/Max para Pi 5), temperatura do SoC, clock de CPU e alertas de throttling por aquecimento ou subtensão via `vcgencmd`.
-* 🔄 **Recuperação de Queda de Energia (Autostart Inteligente):** Inicialização automática no boot com contagem regressiva de 60 segundos com janela de cancelamento pelo teclado para permitir ajustes antes de iniciar a gravação.
+* 🔄 **Recuperação de Queda de Energia (Autostart Inteligente):** Inicialização automática no boot com contagem regressiva de 180 segundos com janela de cancelamento pelo teclado para permitir ajustes antes de iniciar a gravação.
 * 📁 **Separação Limpa de Dados:** Todos os vídeos, logs de execução e arquivos CSV são gravados automaticamente na pasta `~/Desktop/Gravacoes_Colmeia/`, mantendo o repositório Git limpo.
 * 📱 **Controle Headless via Smartphone (USB Tethering & VNC):** Opere o Raspberry Pi 5 em campo sem monitor físico, usando um smartphone Android como tela, mouse/teclado e roteador de internet (veja [`tethering/README.md`](tethering/README.md) e o [Guia Ilustrado com Telas](doc/raspberry_pi_5_usb_tethering.md)).
 * 🧩 **Extensibilidade Modular:** Classes base abstratas (`BaseCamera` e `BaseSensor`) facilitam adicionar suporte a novas câmeras ou sensores.
@@ -155,7 +155,7 @@ Dê duplo clique no atalho **`Gravar Vídeos (PiHive)`** na Área de Trabalho ou
 ```bash
 ./scripts/iniciar_gravacao.sh
 ```
-* Uma janela de terminal abrirá exibindo uma contagem regressiva de 60 segundos.
+* Uma janela de terminal abrirá exibindo uma contagem regressiva de 180 segundos.
 * Se precisar cancelar para mexer na colmeia ou câmera, basta pressionar **`C`** para abrir o menu interativo.
 * Ao fim do tempo (ou pressionando `ENTER`), a gravação e a coleta de sensores iniciam imediatamente.
 
@@ -208,7 +208,7 @@ VIDEO_DURATION_SEC = 60          # Duração de cada bloco de vídeo (segundos)
 HORA_INICIO_GRAVACAO = 4         # Início do ciclo diário de gravação (04:00)
 HORA_TERMINO_GRAVACAO = 19       # Término do ciclo diário de gravação (19:00)
 LIMITE_ESPACO_LIVRE_GB = 5.0     # Parada preventiva se disco estiver quase cheio
-AUTOSTART_COUNTDOWN_SEC = 60     # Duração da contagem regressiva no boot
+AUTOSTART_COUNTDOWN_SEC = 180    # Duração da contagem regressiva no boot
 CAMERA_DRIVER = "imx708"         # Driver da câmera ativa
 ```
 

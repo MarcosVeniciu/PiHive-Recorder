@@ -13,8 +13,8 @@ if [ -d "$PROJECT_DIR/.venv" ]; then
     source "$PROJECT_DIR/.venv/bin/activate"
 fi
 
-# Tempo padrão de contagem regressiva (em segundos)
-COUNTDOWN_SECONDS=60
+# Tempo padrão de contagem regressiva (em segundos) - lido do config.py ou 180s por padrão
+COUNTDOWN_SECONDS=$(python3 -c "import config; print(getattr(config, 'AUTOSTART_COUNTDOWN_SEC', 180))" 2>/dev/null || echo 180)
 
 echo ""
 echo "=================================================================="

@@ -141,7 +141,7 @@ if [ "$ENABLE_AUTOSTART" = true ]; then
     sed "s|{{PROJECT_DIR}}|$PROJECT_DIR|g" "$PROJECT_DIR/templates/PiHive_Autostart.desktop.template" > "$AUTOSTART_DIR/PiHive_Autostart.desktop"
     chmod +x "$AUTOSTART_DIR/PiHive_Autostart.desktop"
     echo -e "${GREEN}Autostart ATIVADO em: $AUTOSTART_DIR/PiHive_Autostart.desktop${RESET}"
-    echo -e "Ao ligar o Raspberry Pi, uma janela abrirá com 60s de contagem regressiva para cancelamento."
+    echo -e "Ao ligar o Raspberry Pi, uma janela abrirá com 180s de contagem regressiva para cancelamento."
 else
     rm -f "$AUTOSTART_DIR/PiHive_Autostart.desktop"
     echo -e "${YELLOW}Autostart não ativado.${RESET}"

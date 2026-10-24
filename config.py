@@ -32,7 +32,7 @@ VIDEO_DURATION_SEC = 60          # Duração de cada bloco de vídeo em segundos
 HORA_INICIO_GRAVACAO = 4         # Início da gravação diária (04:00)
 HORA_TERMINO_GRAVACAO = 19       # Término da gravação diária (19:00)
 LIMITE_ESPACO_LIVRE_GB = 5.0     # Parar gravações se espaço livre < 5 GB
-AUTOSTART_COUNTDOWN_SEC = 60     # Tempo de espera na inicialização antes de gravar
+AUTOSTART_COUNTDOWN_SEC = 180    # Tempo de espera na inicialização antes de gravar
 
 # --- SELEÇÃO DE CÂMERA ---
 # Driver correspondente em cameras/ (atualmente 'imx708' para Camera Module 3)
